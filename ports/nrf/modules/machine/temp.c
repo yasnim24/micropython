@@ -39,9 +39,8 @@
 
 #if BLUETOOTH_SD
 #include "py/nlr.h"
-#include "ble_drv.h"
+#include "softdevice_drv.h"
 #include "nrf_soc.h"
-#define BLUETOOTH_STACK_ENABLED() (ble_drv_stack_enabled())
 #endif // BLUETOOTH_SD
 
 typedef struct _machine_temp_obj_t {
@@ -92,7 +91,7 @@ int32_t temp_read(void) {
 static mp_obj_t machine_temp_read(mp_uint_t n_args, const mp_obj_t *args) {
 
 #if BLUETOOTH_SD
-    if (BLUETOOTH_STACK_ENABLED() == 1) {
+    if (softdevice_drv_enabled()) {
         int32_t temp;
         (void)sd_temp_get(&temp);
         return MP_OBJ_NEW_SMALL_INT(temp / 4); // resolution of 0.25 degree celsius

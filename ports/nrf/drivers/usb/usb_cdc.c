@@ -41,7 +41,6 @@
 #ifdef BLUETOOTH_SD
 #include "nrf_sdm.h"
 #include "nrf_soc.h"
-#include "ble_drv.h"
 #endif
 
 extern void tusb_hal_nrf_power_event(uint32_t event);
@@ -166,12 +165,6 @@ int usb_cdc_init(void)
 {
     static bool initialized = false;
     if (!initialized) {
-
-#if BLUETOOTH_SD
-        // Initialize the clock and BLE stack.
-        ble_drv_stack_enable();
-#endif
-
         board_init();
         initialized = true;
     }

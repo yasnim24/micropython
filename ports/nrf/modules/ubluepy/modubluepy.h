@@ -27,6 +27,15 @@
 #ifndef UBLUEPY_H__
 #define UBLUEPY_H__
 
+// includes <mpconfigport.h> -> "bluetooth_conf.h"
+#include "py/mpconfig.h"
+
+#if MICROPY_PY_UBLUEPY
+
+#if !BLUETOOTH_BLE_DRV
+#error MICROPY_PY_BLE_NUS needs BLUETOOTH_BLE_DRV.
+#endif
+
 /* Examples:
 
 Advertisement:
@@ -196,5 +205,7 @@ typedef enum _ubluepy_attr_t {
     UBLUEPY_ATTR_CCCD           = 0x01,
     UBLUEPY_ATTR_SCCD           = 0x02,
 } ubluepy_attr_t;
+
+#endif // MICROPY_PY_UBLUEPY
 
 #endif // UBLUEPY_H__

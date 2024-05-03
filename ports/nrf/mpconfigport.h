@@ -292,6 +292,10 @@
 #define MICROPY_PY_BLE_NUS                       (0)
 #endif
 
+#ifndef MICROPY_PY_BLUETOOTH
+#define MICROPY_PY_BLUETOOTH                     (0)
+#endif
+
 // type definitions for the specific machine
 
 #define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))

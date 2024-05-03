@@ -24,7 +24,10 @@
  * THE SOFTWARE.
  */
 
-#if BLUETOOTH_SD
+// includes <mpconfigport.h> -> "bluetooth_conf.h"
+#include "py/mpconfig.h"
+
+#if BLUETOOTH_BLE_DRV
 
 #include <stdio.h>
 #include <string.h>
@@ -32,16 +35,11 @@
 
 #include "py/runtime.h"
 #include "ble_drv.h"
+#include "drivers/softdevice_drv.h"
 #include "nrf_sdm.h"
 #include "ble_gap.h"
 #include "ble.h" // sd_ble_uuid_encode
-#include "drivers/flash.h"
 #include "mphalport.h"
-
-
-#if MICROPY_HW_USB_CDC
-#include "usb_cdc.h"
-#endif
 
 #define BLE_DRIVER_VERBOSE 0
 
@@ -108,66 +106,18 @@ static mp_obj_t mp_gattc_char_data_observer;
 #endif
 
 #if (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
-#include "nrf_nvic.h"
 #define BLE_GAP_ADV_MAX_SIZE 31
 #define BLE_DRV_CONN_CONFIG_TAG 1
 
 static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
 static uint8_t m_scan_buffer[BLE_GAP_SCAN_BUFFER_MIN];
-
-nrf_nvic_state_t nrf_nvic_state = {{0}, 0};
-#endif
-
-#if (BLUETOOTH_SD == 110)
-void softdevice_assert_handler(uint32_t pc, uint16_t line_number, const uint8_t * p_file_name) {
-    BLE_DRIVER_LOG("ERROR: SoftDevice assert!!!");
-}
-#else
-void softdevice_assert_handler(uint32_t id, uint32_t pc, uint32_t info) {
-    BLE_DRIVER_LOG("ERROR: SoftDevice assert!!!");
-}
 #endif
 
 uint32_t ble_drv_stack_enable(void) {
     m_adv_in_progress = false;
     m_tx_in_progress  = 0;
 
-#if (BLUETOOTH_SD == 110)
-  #if BLUETOOTH_LFCLK_RC
-    uint32_t err_code = sd_softdevice_enable(NRF_CLOCK_LFCLKSRC_RC_250_PPM_250MS_CALIBRATION,
-                                             softdevice_assert_handler);
-  #else
-    uint32_t err_code = sd_softdevice_enable(NRF_CLOCK_LFCLKSRC_XTAL_20_PPM,
-                                             softdevice_assert_handler);
-  #endif // BLUETOOTH_LFCLK_RC
-#endif // (BLUETOOTH_SD == 110)
-
-#if (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
-  #if BLUETOOTH_LFCLK_RC
-    nrf_clock_lf_cfg_t clock_config = {
-        .source = NRF_CLOCK_LF_SRC_RC,
-        .rc_ctiv = 16,
-        .rc_temp_ctiv = 2,
-        .accuracy = NRF_CLOCK_LF_ACCURACY_250_PPM
-    };
-  #else
-    nrf_clock_lf_cfg_t clock_config = {
-        .source = NRF_CLOCK_LF_SRC_XTAL,
-        .rc_ctiv = 0,
-        .rc_temp_ctiv = 0,
-        .accuracy = NRF_CLOCK_LF_ACCURACY_20_PPM
-    };
-  #endif // BLUETOOTH_LFCLK_RC
-
-    uint32_t err_code = sd_softdevice_enable(&clock_config,
-                                             softdevice_assert_handler);
-#endif // (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
-
-    BLE_DRIVER_LOG("SoftDevice enable status: " UINT_FMT "\n", (uint16_t)err_code);
-
-    err_code = sd_nvic_EnableIRQ(SD_EVT_IRQn);
-
-    BLE_DRIVER_LOG("IRQ enable status: " UINT_FMT "\n", (uint16_t)err_code);
+    uint32_t err_code = softdevice_drv_enable();
 
 #if (BLUETOOTH_SD == 110)
     ble_enable_params_t ble_enable_params;
@@ -241,17 +191,11 @@ uint32_t ble_drv_stack_enable(void) {
 }
 
 void ble_drv_stack_disable(void) {
-    sd_softdevice_disable();
+    softdevice_drv_disable();
 }
 
 uint8_t ble_drv_stack_enabled(void) {
-    uint8_t is_enabled;
-    uint32_t err_code = sd_softdevice_is_enabled(&is_enabled);
-    (void)err_code;
-
-    BLE_DRIVER_LOG("Is enabled status: " UINT_FMT "\n", (uint16_t)err_code);
-
-    return is_enabled;
+    return softdevice_drv_enabled() ? 1 : 0;
 }
 
 void ble_drv_address_get(ble_drv_addr_t * p_addr) {
@@ -927,25 +871,6 @@ void ble_drv_discover_descriptors(void) {
 
 #endif // (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
 
-static void sd_evt_handler(uint32_t evt_id) {
-    switch (evt_id) {
-#if MICROPY_HW_ENABLE_INTERNAL_FLASH_STORAGE || MICROPY_MBFS
-        case NRF_EVT_FLASH_OPERATION_SUCCESS:
-            flash_operation_finished(FLASH_STATE_SUCCESS);
-            break;
-        case NRF_EVT_FLASH_OPERATION_ERROR:
-            flash_operation_finished(FLASH_STATE_ERROR);
-            break;
-#endif
-        default:
-            // unhandled event!
-            break;
-    }
-#if MICROPY_HW_USB_CDC
-    // Forward SOC events to USB CDC driver.
-    usb_cdc_sd_event_handler(evt_id);
-#endif
-}
 
 static void ble_evt_handler(ble_evt_t * p_ble_evt) {
 // S132 event ranges.
@@ -1164,16 +1089,8 @@ static void ble_evt_handler(ble_evt_t * p_ble_evt) {
 
 static uint8_t m_ble_evt_buf[sizeof(ble_evt_t) + (GATT_MTU_SIZE_DEFAULT)] __attribute__ ((aligned (4)));
 
-#ifdef NRF51
-void SWI2_IRQHandler(void) {
-#else
-void SWI2_EGU2_IRQHandler(void) {
-#endif
-
-    uint32_t evt_id;
-    while (sd_evt_get(&evt_id) != NRF_ERROR_NOT_FOUND) {
-        sd_evt_handler(evt_id);
-    }
+// called from softdevice_drv.c
+void ble_drv_irq_handler() {
 
     while (1) {
         uint16_t evt_len  = sizeof(m_ble_evt_buf);
@@ -1195,4 +1112,4 @@ void SWI2_EGU2_IRQHandler(void) {
     }
 }
 
-#endif // BLUETOOTH_SD
+#endif // BLUETOOTH_BLE_DRV

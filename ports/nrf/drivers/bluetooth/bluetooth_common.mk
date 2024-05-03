@@ -22,6 +22,11 @@ else
 	$(error Incorrect softdevice set flag)
 endif
 
+ifneq ($(MICROPY_PY_BLUETOOTH),)
+	CFLAGS += -DMICROPY_PY_BLUETOOTH=$(MICROPY_PY_BLUETOOTH)
+endif
+
+
 SOFTDEV_HEX_NAME = $(SD)_$(MCU_VARIANT)_$(SOFTDEV_VERSION)_softdevice.hex
 SOFTDEV_HEX_PATH = drivers/bluetooth/$(SD)_$(MCU_VARIANT)_$(SOFTDEV_VERSION)
 

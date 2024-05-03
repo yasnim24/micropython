@@ -35,8 +35,7 @@
 
 #if BLUETOOTH_SD
 #include "nrf_soc.h"
-#include "ble_drv.h"
-#define BLUETOOTH_STACK_ENABLED() (ble_drv_stack_enabled())
+#include "softdevice_drv.h"
 #endif
 
 #define FLASH_PAGE_ALIGN_UP(addr)   (((addr) - 1) + (FLASH_PAGESIZE)-(((addr) - 1) % (FLASH_PAGESIZE)))
@@ -49,7 +48,7 @@ static mp_obj_t dcdc(size_t n_args, const mp_obj_t *args) {
     if (n_args > 0) {
         bool dcdc_state = mp_obj_is_true(args[0]);
         #if BLUETOOTH_SD
-        if (BLUETOOTH_STACK_ENABLED()) {
+        if (softdevice_drv_enabled()) {
             sd_power_dcdc_mode_set(dcdc_state);
         } else
         #endif

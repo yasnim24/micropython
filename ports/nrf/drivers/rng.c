@@ -34,8 +34,7 @@
 
 #if BLUETOOTH_SD
 #include "nrf_soc.h"
-#include "ble_drv.h"
-#define BLUETOOTH_STACK_ENABLED() (ble_drv_stack_enabled())
+#include "softdevice_drv.h"
 #endif
 
 static inline uint32_t generate_hw_random(void) {
@@ -62,7 +61,7 @@ static inline uint32_t generate_hw_random(void) {
 uint32_t rng_generate_random_word(void) {
 
 #if BLUETOOTH_SD
-    if (BLUETOOTH_STACK_ENABLED() == 1) {
+    if (softdevice_drv_enabled()) {
         uint32_t retval = 0;
         uint32_t status;
         do {

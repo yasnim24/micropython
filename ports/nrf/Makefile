@@ -62,7 +62,17 @@ FROZEN_MANIFEST ?= modules/manifest.py
 
 # include py core make definitions
 include ../../py/py.mk
+
+# Workaround:
+# With MICROPY_PY_BLUETOOTH=1 "extmod/extmod.mk"
+# wants MICROPY_BLUETOOTH_NIMBLE or MICROPY_BLUETOOTH_BTSTACK.
+# So set MICROPY_PY_BLUETOOTH temporarily to 0.
+SAVED_MICROPY_PY_BLUETOOTH := $(MICROPY_PY_BLUETOOTH)
+# Use the override directive to set MICROPY_PY_BLUETOOTH even if
+# it was specified on the make command line. 
+override MICROPY_PY_BLUETOOTH := 0
 include ../../extmod/extmod.mk
+override MICROPY_PY_BLUETOOTH := $(SAVED_MICROPY_PY_BLUETOOTH)
 
 GIT_SUBMODULES += lib/nrfx lib/tinyusb
 
@@ -231,6 +241,7 @@ SRC_C += \
 	drivers/rng.c \
 	drivers/softpwm.c \
 	drivers/ticker.c \
+	drivers/softdevice_drv.c \
 	drivers/bluetooth/ble_drv.c \
 	drivers/bluetooth/ble_uart.c \
 	$(wildcard $(BOARD_DIR)/*.c) \
@@ -273,6 +284,7 @@ DRIVERS_SRC_C += $(addprefix modules/,\
 	os/microbitfs.c \
 	board/modboard.c \
 	board/led.c \
+	bluetooth/modbluetooth.c \
 	ubluepy/modubluepy.c \
 	ubluepy/ubluepy_peripheral.c \
 	ubluepy/ubluepy_service.c \

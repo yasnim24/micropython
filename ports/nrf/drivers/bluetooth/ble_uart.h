@@ -27,7 +27,14 @@
 #ifndef BLUETOOTH_LE_UART_H__
 #define BLUETOOTH_LE_UART_H__
 
-#if BLUETOOTH_SD
+// includes <mpconfigport.h> -> "bluetooth_conf.h"
+#include "py/mpconfig.h"
+
+#if MICROPY_PY_BLE_NUS
+
+#if !BLUETOOTH_BLE_DRV
+#error MICROPY_PY_BLE_NUS needs BLUETOOTH_BLE_DRV.
+#endif
 
 #include "modubluepy.h"
 #include "ble_drv.h"
@@ -37,6 +44,6 @@ void ble_uart_advertise(void);
 bool ble_uart_connected(void);
 bool ble_uart_enabled(void);
 
-#endif // BLUETOOTH_SD
+#endif // MICROPY_PY_BLE_NUS
 
 #endif // BLUETOOTH_LE_UART_H__

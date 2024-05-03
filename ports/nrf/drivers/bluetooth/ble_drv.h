@@ -27,7 +27,10 @@
 #ifndef BLUETOOTH_LE_DRIVER_H__
 #define BLUETOOTH_LE_DRIVER_H__
 
-#if BLUETOOTH_SD
+// includes <mpconfigport.h> -> "bluetooth_conf.h"
+#include "py/mpconfig.h"
+
+#if BLUETOOTH_BLE_DRV
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -124,6 +127,9 @@ bool ble_drv_discover_characteristic(mp_obj_t obj,
 
 void ble_drv_discover_descriptors(void);
 
-#endif // BLUETOOTH_SD
+// called from softdevice_drv.c
+void ble_drv_irq_handler();
+
+#endif // BLUETOOTH_BLE_DRV
 
 #endif // BLUETOOTH_LE_DRIVER_H__

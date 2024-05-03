@@ -27,7 +27,7 @@
 
 #include "py/builtin.h"
 
-#if BLUETOOTH_SD
+#if MICROPY_PY_BLE
 #include "help_sd.h"
 #endif
 
@@ -41,7 +41,7 @@ const char nrf5_help_text[] =
     "  board.LED(n)    -- create an LED object for LED n (n=" HELP_TEXT_BOARD_LED ")\n"
     "\n"
 #endif
-#if BLUETOOTH_SD
+#if MICROPY_PY_BLE
     HELP_TEXT_SD
 #endif
     "Control commands:\n"

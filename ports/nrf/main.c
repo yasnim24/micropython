@@ -54,6 +54,7 @@
 #include "adc.h"
 #include "rtcounter.h"
 #include "mphalport.h"
+#include "softdevice_drv.h"
 
 #if MICROPY_PY_MACHINE_HW_PWM
 #include "pwm.h"
@@ -265,6 +266,10 @@ soft_reset:
     ret = pyexec_file_if_exists("boot.py");
     #endif
 
+    #if BLUETOOTH_SD
+    softdevice_drv_enable();
+    #endif
+
     #if MICROPY_HW_USB_CDC
     usb_cdc_init();
     #endif
@@ -297,7 +302,7 @@ soft_reset:
     printf("MPY: soft reboot\n");
 
     #if BLUETOOTH_SD
-    sd_softdevice_disable();
+    softdevice_drv_disable();
     #endif
 
     goto soft_reset;

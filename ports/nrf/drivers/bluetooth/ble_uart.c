@@ -24,7 +24,7 @@
  * THE SOFTWARE.
  */
 
-#if BLUETOOTH_SD
+#if MICROPY_PY_BLE_NUS
 
 #include <string.h>
 #include "ble_uart.h"
@@ -36,8 +36,6 @@
 #if MICROPY_PY_SYS_STDFILES
 #include "py/stream.h"
 #endif
-
-#if MICROPY_PY_BLE_NUS
 
 static ubluepy_uuid_obj_t uuid_obj_service = {
     .base.type = &ubluepy_uuid_type,
@@ -314,5 +312,3 @@ bool ble_uart_enabled(void) {
 }
 
 #endif // MICROPY_PY_BLE_NUS
-
-#endif // BLUETOOTH_SD
