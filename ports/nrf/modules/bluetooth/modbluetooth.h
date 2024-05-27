@@ -24,6 +24,8 @@
  * THE SOFTWARE.
  */
 
+// TODO: Change copyrights in source files.
+
 #ifndef MICROPY_INCLUDED_NRF_MODULES_MODBLUETOOTH_H
 #define MICROPY_INCLUDED_NRF_MODULES_MODBLUETOOTH_H
 
@@ -34,8 +36,10 @@
 
 #if MICROPY_PY_BLUETOOTH
 
+#include "ble.h" // ble_evt_t
+
 // called from softdevice_drv.c
-void modbluetooth_irq_handler();
+void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt);
 
 #endif // MICROPY_PY_BLUETOOTH
 

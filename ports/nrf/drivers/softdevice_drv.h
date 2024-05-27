@@ -35,7 +35,7 @@
 #include <stdint.h>
 
 uint32_t softdevice_drv_enable(void);
-void softdevice_drv_disable(void);
+uint32_t softdevice_drv_disable(void);
 bool softdevice_drv_enabled(void);
 
 #endif // BLUETOOTH_SD

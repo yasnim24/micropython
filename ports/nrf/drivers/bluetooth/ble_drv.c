@@ -69,9 +69,16 @@
 #else
   #define MAX_TX_IN_PROGRESS         (10)
 #endif
-#if !defined(GATT_MTU_SIZE_DEFAULT) && defined(BLE_GATT_ATT_MTU_DEFAULT)
-  #define GATT_MTU_SIZE_DEFAULT BLE_GATT_ATT_MTU_DEFAULT
+
+// Maximum size of ATT packet that can be sent or received.
+#ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+#error "NRF_SDH_BLE_GATT_MAX_MTU_SIZE not set."
+#endif // NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+
+#if NRF_SDH_BLE_GATT_MAX_MTU_SIZE < BLE_GATT_ATT_MTU_DEFAULT
+#error "NRF_SDH_BLE_GATT_MAX_MTU_SIZE is less than BLE_GATT_ATT_MTU_DEFAULT."
 #endif
+
 
 #define SD_TEST_OR_ENABLE() \
 if (ble_drv_stack_enabled() == 0) { \
@@ -321,7 +328,7 @@ bool ble_drv_characteristic_add(ubluepy_characteristic_obj_t * p_char_obj) {
     attr_char_value.p_attr_md = &attr_md;
     attr_char_value.init_len  = sizeof(uint8_t);
     attr_char_value.init_offs = 0;
-    attr_char_value.max_len   = (GATT_MTU_SIZE_DEFAULT - 3);
+    attr_char_value.max_len   = (NRF_SDH_BLE_GATT_MAX_MTU_SIZE - 3);
 
     ble_gatts_char_handles_t handles;
 
@@ -872,7 +879,8 @@ void ble_drv_discover_descriptors(void) {
 #endif // (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
 
 
-static void ble_evt_handler(ble_evt_t * p_ble_evt) {
+// called from softdevice_drv.c
+void ble_drv_ble_evt_handler(const ble_evt_t *p_ble_evt) {
 // S132 event ranges.
 // Common 0x01 -> 0x0F
 // GAP    0x10 -> 0x2F
@@ -1084,31 +1092,6 @@ static void ble_evt_handler(ble_evt_t * p_ble_evt) {
         default:
             BLE_DRIVER_LOG(">>> unhandled evt: 0x" HEX2_FMT "\n", p_ble_evt->header.evt_id);
             break;
-    }
-}
-
-static uint8_t m_ble_evt_buf[sizeof(ble_evt_t) + (GATT_MTU_SIZE_DEFAULT)] __attribute__ ((aligned (4)));
-
-// called from softdevice_drv.c
-void ble_drv_irq_handler() {
-
-    while (1) {
-        uint16_t evt_len  = sizeof(m_ble_evt_buf);
-        uint32_t err_code = sd_ble_evt_get(m_ble_evt_buf, &evt_len);
-        if (err_code != NRF_SUCCESS) {
-            // Possible error conditions:
-            //  * NRF_ERROR_NOT_FOUND: no events left, break
-            //  * NRF_ERROR_DATA_SIZE: retry with a bigger data buffer
-            //    (currently not handled, TODO)
-            //  * NRF_ERROR_INVALID_ADDR: pointer is not aligned, should
-            //    not happen.
-            // In all cases, it's best to simply stop now.
-            if (err_code == NRF_ERROR_DATA_SIZE) {
-                BLE_DRIVER_LOG("NRF_ERROR_DATA_SIZE\n");
-            }
-            break;
-        }
-        ble_evt_handler((ble_evt_t *)m_ble_evt_buf);
     }
 }
 

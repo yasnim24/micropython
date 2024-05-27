@@ -41,6 +41,11 @@ ifneq ($(BOOTLOADER),)
 	CFLAGS += -DBOOTLOADER_$(BOOTLOADER_UPPER)_VERSION=$(BOOTLOADER_MAJOR)$(BOOTLOADER_MINOR)
 endif
 
+ifeq ($(USE_NRF_SDK_COMPONENTS), 1)
+# include nRF5 SDK components
+LD_FILES += sdk/app.ld
+endif
+
 LD_FILES += boards/memory.ld boards/common.ld
 
 ifneq ($(LD_FILE),)
@@ -201,6 +206,13 @@ SRC_SHARED_C += $(addprefix shared/,\
 	timeutils/timeutils.c \
 	)
 
+# TODO: Clean up.	
+#ifeq ($(MICROPY_PY_BLUETOOTH), 1)
+#SRC_SHARED_C += $(addprefix shared/,\
+#	runtime/softtimer.c  \
+#	)
+#endif
+
 ifeq ($(MICROPY_FATFS), 1)
 SRC_LIB_C += $(addprefix lib/,\
         oofatfs/ff.c \
@@ -229,6 +241,11 @@ SRC_NRFX += $(addprefix lib/nrfx/drivers/src/,\
 	nrfx_power.c \
 	nrfx_clock.c \
 	)
+
+ifeq ($(USE_NRF_SDK_COMPONENTS), 1)
+# include nRF5 SDK components
+include sdk/sdk.mk
+endif
 
 SRC_C += \
 	main.c \
@@ -314,6 +331,7 @@ OBJ += $(PY_O)
 OBJ += $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_NRFX:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_NRFX_HAL:.c=.o))
+OBJ += $(addprefix $(BUILD)/, $(SRC_SDK:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(DRIVERS_SRC_C:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SYSTEM_C_SRC:.c=.o))
 OBJ += $(addprefix $(BUILD)/, $(SRC_LIB_C:.c=.o))

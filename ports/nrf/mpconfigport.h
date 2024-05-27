@@ -337,9 +337,16 @@ long unsigned int rng_generate_random_word(void);
 #define MICROPY_HW_USBDEV_TASK_HOOK ;
 #endif
 
+#if MICROPY_PY_BLUETOOTH && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+#define MICROPY_PY_BLUETOOTH_POLL_HOOK extern void mp_bluetooth_poll_hook(void); mp_bluetooth_poll_hook();
+#else
+#define MICROPY_PY_BLUETOOTH_POLL_HOOK ;
+#endif
+
 #define MICROPY_EVENT_POLL_HOOK \
     do { \
         MICROPY_HW_USBDEV_TASK_HOOK \
+        MICROPY_PY_BLUETOOTH_POLL_HOOK \
         extern void mp_handle_pending(bool); \
         mp_handle_pending(true); \
         __WFI(); \

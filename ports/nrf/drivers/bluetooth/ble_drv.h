@@ -35,6 +35,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "ble.h" // ble_evt_t
+
 #include "modubluepy.h"
 
 typedef struct {
@@ -128,7 +130,7 @@ bool ble_drv_discover_characteristic(mp_obj_t obj,
 void ble_drv_discover_descriptors(void);
 
 // called from softdevice_drv.c
-void ble_drv_irq_handler();
+void ble_drv_ble_evt_handler(const ble_evt_t *p_ble_evt);
 
 #endif // BLUETOOTH_BLE_DRV
 

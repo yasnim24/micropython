@@ -28,68 +28,106 @@
 // includes <mpconfigport.h> -> "bluetooth_conf.h"
 #include "py/mpconfig.h"
 
-#if MICROPY_PY_BLUETOOTH
 
-#include "py/runtime.h"
-#include "py/mperrno.h"
-#include "py/mphal.h"
+#if MICROPY_PY_BLUETOOTH
+#if (BLUETOOTH_SD == 110) && USE_NRF_SDK_COMPONENTS
+#error "SoftDevice 110 not supported with USE_NRF_SDK_COMPONENTS."
+#endif
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && !USE_NRF_SDK_COMPONENTS
+#error "MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING requires USE_NRF_SDK_COMPONENTS."
+#endif
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE || MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT
+#if (BLUETOOTH_SD != 132) && (BLUETOOTH_SD != 140)
+#error "MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE and MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT are only supported for SD 132 and SD 140."
+#endif
+#endif
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
+#error "MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS is not supported."
+#endif
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_HCI_CMD
+#error "MICROPY_PY_BLUETOOTH_ENABLE_HCI_CMD is not supported."
+#endif
+
 
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 
-#include "nrf_error.h"
+#if USE_NRF_SDK_COMPONENTS
+#include "nrf_sdh.h"
+#include "nrf_sdh_ble.h"
+#include "nrf_sdh_soc.h"
+#include "peer_manager.h"
+#include "peer_manager_handler.h"
+#else // #if USE_NRF_SDK_COMPONENTS
 #include "nrf_sdm.h"
+#endif // #if USE_NRF_SDK_COMPONENTS
+
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+#if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+#include "nrf_ble_lesc.h" // nrf_ble_lesc_request_handler
+
+#endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+
+
+#include "nrf_error.h"
 #include "ble_gap.h"
 #include "ble.h" // sd_ble_uuid_encode
 
+#include "py/runtime.h"
+#include "py/mperrno.h"
+#include "py/mphal.h"
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+#if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+#include "shared/runtime/softtimer.h" // soft_timer_insert
+
+#endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+
 #include "softdevice_drv.h"
+#include "extmod/modmachine.h" // machine_timer_type
 #include "extmod/modbluetooth.h"
 #include "modbluetooth.h"
 
 // TODO: Comment out printf() of DEBUG_printf() when debug is done.
 #define DEBUG_printf(...) printf("modbluetooth: " __VA_ARGS__)
 
+
 #define ERRNO_BLUETOOTH_NOT_ACTIVE MP_ENODEV
 
-#if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE || MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT
-#if (BLUETOOTH_SD != 132) && (BLUETOOTH_SD != 140)
-#error MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE and MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT are only supported for SD 132 and SD 140.
-#endif
-#endif
-
-#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && BLUETOOTH_SD != 140
-#error MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING is only supported for SD=140.
-#endif
-
-#if MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
-#error MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS is not supported.
-#endif
-
-#if MICROPY_PY_BLUETOOTH_ENABLE_HCI_CMD
-#error MICROPY_PY_BLUETOOTH_ENABLE_HCI_CMD is not supported.
-#endif
 
 // Maximum size of ATT packet that can be sent or received.
 //
 // Note:
 // This is the maximum value that can be set with
 // mp_bluetooth_set_preferred_mtu().
-//
-// It will be used to calculate the size of m_ble_evt_buf.
-#ifdef MP_BLUETOOTH_MAX_ATT_MTU
+#ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
 
-#if (BLUETOOTH_SD == 110)
-#error "MP_BLUETOOTH_MAX_ATT_MTU could not be set for SD110."
+#error "NRF_SDH_BLE_GATT_MAX_MTU_SIZE not set."
+
+#else // #ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+
+#if (BLUETOOTH_SD == 110) && (NRF_SDH_BLE_GATT_MAX_MTU_SIZE != BLE_GATT_ATT_MTU_DEFAULT)
+#error "NRF_SDH_BLE_GATT_MAX_MTU_SIZE have to be BLE_GATT_ATT_MTU_DEFAULT for SD110."
 #endif
 
-#else
-#define MP_BLUETOOTH_MAX_ATT_MTU BLE_GATT_ATT_MTU_DEFAULT
-#endif // MP_BLUETOOTH_MAX_ATT_MTU
-
-#if MP_BLUETOOTH_MAX_ATT_MTU < BLE_GATT_ATT_MTU_DEFAULT
-#error "MP_BLUETOOTH_MAX_ATT_MTU is less than BLE_GATT_ATT_MTU_DEFAULT."
+#if NRF_SDH_BLE_GATT_MAX_MTU_SIZE < BLE_GATT_ATT_MTU_DEFAULT
+#error "NRF_SDH_BLE_GATT_MAX_MTU_SIZE is less than BLE_GATT_ATT_MTU_DEFAULT."
 #endif
+
+#endif // #ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+
 
 #ifndef MICROPY_PY_BLUETOOTH_DEFAULT_GAP_NAME
 #define MICROPY_PY_BLUETOOTH_DEFAULT_GAP_NAME "MPY NRF"
@@ -131,8 +169,10 @@
 #error "MP_BLUETOOTH_MAX_DESC_ATTR_LEN is less than MP_BLUETOOTH_DEFAULT_DESC_ATTR_LEN."
 #endif
 
-
+#if !USE_NRF_SDK_COMPONENTS
 #define MSEC_TO_UNITS(TIME_MS, RESOLUTION) (((TIME_MS) * 1000) / (RESOLUTION))
+#endif
+
 #define USEC_TO_UNITS(TIME_US, RESOLUTION) ((TIME_US) / (RESOLUTION))
 #define UNIT_625_US (625)
 #define UNIT_1250_US (1250)
@@ -230,13 +270,6 @@ typedef struct {
     // ongoing.
     ble_gattc_handle_range_t desc_discovery_range;
 
-    #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
-    // Structs for p_sec_keyset argument of sd_ble_gap_sec_params_reply().
-    ble_gap_enc_key_t enc_key;
-    ble_gap_id_key_t id_key;
-    ble_gap_sign_info_t sign_key;
-    ble_gap_lesc_p256_pk_t pk;
-    #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 } m_connection_info_t;
 
 
@@ -275,8 +308,6 @@ static m_variable_scan_params_t m_variable_scan_params;
 
 
 #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
-// TODO: Experimental.
-
 // Struct for security configuration.
 //
 // It contains the configuration set by
@@ -298,7 +329,7 @@ static m_security_config_t m_security_config;
 // Value used by mp_bluetooth_get_preferred_mtu(), mp_bluetooth_set_preferred_mtu(),
 // mp_bluetooth_gattc_exchange_mtu(), mp_bluetooth_init().
 //
-// The maximum allowed value is MP_BLUETOOTH_MAX_ATT_MTU
+// The maximum allowed value is NRF_SDH_BLE_GATT_MAX_MTU_SIZE
 static uint16_t m_prefered_mtu = BLE_GATT_ATT_MTU_DEFAULT;
 static bool m_adv_in_progress;
 static bool m_services_registered;
@@ -445,6 +476,322 @@ void initialize_device_name_in_root_pointers(size_t device_name_len, const uint8
 }
 
 
+#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+
+// TODO: somehow it should be possible to erase the bonds.
+//    if (erase_bonds)
+//    {
+//        pm_peers_delete();
+//    }
+
+
+// get ble_gap_sec_params_t according to 'm_security_config'.
+static void get_ble_gap_sec_params(ble_gap_sec_params_t *p_sec_params) {
+
+    memset(p_sec_params, 0, sizeof(ble_gap_sec_params_t));
+
+    p_sec_params->bond = m_security_config.bonding;
+    p_sec_params->mitm = m_security_config.mitm_protection;
+    p_sec_params->lesc = m_security_config.le_secure;
+    p_sec_params->io_caps = m_security_config.io_capability;
+
+    //sec_param.keypress = 0;
+    //sec_param.oob = 0;
+    p_sec_params->min_key_size = 7;
+    p_sec_params->max_key_size = 16;
+
+    p_sec_params->kdist_own.enc = m_security_config.bonding;
+    p_sec_params->kdist_own.id = m_security_config.bonding;
+    p_sec_params->kdist_peer.enc = m_security_config.bonding;
+    p_sec_params->kdist_peer.id = m_security_config.bonding;
+}
+
+// TODO: Experimental
+// Call pm_sec_params_set() according to 'm_security_config'.
+static uint32_t set_peer_manager_sec_params(void) {
+
+    ble_gap_sec_params_t sec_params;
+    get_ble_gap_sec_params(&sec_params);
+
+    uint32_t err_code = pm_sec_params_set(&sec_params);
+
+    DEBUG_printf("pm_sec_params_set - " \
+            "bond: %u, " \
+            "mitm: %u, " \
+            "lesc: %u, " \
+            "io_caps: %u " \
+            "- result: 0x%02lx\n",
+            (uint16_t)sec_params.bond,
+            (uint16_t)sec_params.mitm,
+            (uint16_t)sec_params.lesc,
+            (uint16_t)sec_params.io_caps,
+            err_code);
+
+    return err_code;
+}
+
+// TODO: Clean up.
+//// Call pm_conn_sec_params_reply() according to 'm_security_config'.
+//static uint32_t do_pm_conn_sec_params_reply(uint16_t conn_handle, void const *p_context) {
+//
+//    ble_gap_sec_params_t sec_params;
+//    get_ble_gap_sec_params(&sec_params);
+//
+//    uint32_t err_code = pm_conn_sec_params_reply(
+//            conn_handle, &sec_params, p_context);
+//
+/*
+//    DEBUG_printf("pm_conn_sec_params_reply - " \
+//            "bond: %u, " \
+//            "mitm: %u, " \
+//            "lesc: %u, " \
+//            "io_caps: %u " \
+//            "- result: 0x%02lx\n",
+//            (uint16_t)sec_params.bond,
+//            (uint16_t)sec_params.mitm,
+//            (uint16_t)sec_params.lesc,
+//            (uint16_t)sec_params.io_caps,
+//            err_code);
+ *
+ */
+//
+//    return err_code;
+//}
+
+// Peer Manager event handler.
+static void peer_manager_event_handler(pm_evt_t const *p_evt)
+{
+    DEBUG_printf("peer_manager_event_handler - p_evt->evt_id: %d\n", p_evt->evt_id);
+
+    pm_handler_on_pm_evt(p_evt);
+    pm_handler_flash_clean(p_evt);
+
+    // TODO: Clean up.
+//    switch (p_evt->evt_id)
+//    {
+//        case PM_EVT_CONN_SEC_PARAMS_REQ: {
+//            uint16_t conn_handle = p_evt->conn_handle;
+//            const pm_conn_sec_params_req_evt_t *p_conn_sec_params_req =
+//                    &(p_evt->params.conn_sec_params_req);
+//
+//            do_pm_conn_sec_params_reply(conn_handle, p_conn_sec_params_req->p_context);
+//            break;
+//        }
+//
+//        default: {
+//            break;
+//        }
+//    }
+}
+
+
+#if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+// TODO: Clean up.
+
+//// Interval in milliseconds for periodic_lesc_py_callback().
+//#define PERIODIC_LESC_PY_CALLBACK_INTERVAL_MS 5
+//
+//// Callback that will be called periodically for LE encryption purposes.
+////
+//// It is scheduled with soft_timer_insert() that uses mp_sched_schedule().
+//// I. e. it is executing in schedule context.
+//static mp_obj_t periodic_lesc_py_callback(mp_obj_t machine_timer_obj) {
+//    (void)machine_timer_obj;
+//
+//    uint32_t err_code = nrf_ble_lesc_request_handler();
+//
+//    if (err_code != NRF_SUCCESS) {
+//        DEBUG_printf("nrf_ble_lesc_request_handler(): 0x%lx\n", err_code);
+//    }
+//
+//    return mp_const_none;
+//}
+//
+//static MP_DEFINE_CONST_FUN_OBJ_1(periodic_lesc_py_callback_obj, periodic_lesc_py_callback);
+//
+//// Soft Timer object for periodic_lesc_py_callback().
+////
+//// soft_timer_entry_t is identical to the object used by 'extmod/machine_timer.c'.
+//static soft_timer_entry_t m_periodic_lesc_py_soft_timer_obj;
+//
+//static void register_periodic_lesc_py_soft_timer(void) {
+//
+//    memset(&m_periodic_lesc_py_soft_timer_obj, 0, sizeof(m_periodic_lesc_py_soft_timer_obj));
+//
+//    m_periodic_lesc_py_soft_timer_obj.pairheap.base.type = &machine_timer_type;
+//
+//    m_periodic_lesc_py_soft_timer_obj.flags = SOFT_TIMER_FLAG_PY_CALLBACK;
+//    m_periodic_lesc_py_soft_timer_obj.mode = SOFT_TIMER_MODE_PERIODIC;
+//    m_periodic_lesc_py_soft_timer_obj.delta_ms = PERIODIC_LESC_PY_CALLBACK_INTERVAL_MS;
+//    m_periodic_lesc_py_soft_timer_obj.py_callback =
+//            MP_OBJ_FROM_PTR(&periodic_lesc_py_callback_obj);
+//
+//    soft_timer_insert(
+//            &m_periodic_lesc_py_soft_timer_obj,
+//            PERIODIC_LESC_PY_CALLBACK_INTERVAL_MS);
+//}
+//
+//static void deregister_periodic_lesc_py_soft_timer(void) {
+//    soft_timer_remove(&m_periodic_lesc_py_soft_timer_obj);
+//}
+
+#endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+
+// Structure to hold Peer Manager related state.
+typedef struct {
+    // Flag: pm_init() has been called successfully.
+    uint8_t is_peer_manager_initialized : 1;
+    // Flag: peer_manager_event_handler() is registered.
+    uint8_t is_peer_manager_event_handler_registered : 1;
+// TODO: Clean up.
+//    // Flag: periodic_lesc_py_callback() is registered.
+//    uint8_t is_periodic_lesc_py_soft_timer_registered : 1;
+}m_peer_manager_state_t;
+
+static m_peer_manager_state_t m_peer_manager_state;
+
+
+#if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+// Defines how often nrf_ble_lesc_request_handler() will be called.
+// See mp_bluetooth_poll_hook().
+#define M_NRF_BLE_LESC_REQUEST_HANDLER_COUNT (10)
+
+static uint8_t m_nrf_ble_lesc_request_handler_divisor = M_NRF_BLE_LESC_REQUEST_HANDLER_COUNT;
+
+#endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+
+// TODO: Test
+static bool m_is_lesc_dhkey_request_pendig = false;
+
+// Poll hook that will be called from mp_event_wait_indefinite().
+//
+// The hook is defined by the MICROPY_EVENT_POLL_HOOK macro in
+// 'mpconfigport.h'.
+void mp_bluetooth_poll_hook(void) {
+    #if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+    if (m_is_ble_enabled && m_peer_manager_state.is_peer_manager_initialized) {
+        if (--m_nrf_ble_lesc_request_handler_divisor == 0 || m_is_lesc_dhkey_request_pendig) {
+            m_nrf_ble_lesc_request_handler_divisor = M_NRF_BLE_LESC_REQUEST_HANDLER_COUNT;
+
+            // nRF SDK Peer manager: handle any pending DH key requests.
+            uint32_t err_code = nrf_ble_lesc_request_handler();
+
+            if (err_code != NRF_SUCCESS || m_is_lesc_dhkey_request_pendig) {
+                DEBUG_printf("nrf_ble_lesc_request_handler(): 0x%lx\n", err_code);
+            }
+
+            m_is_lesc_dhkey_request_pendig = false;
+        }
+    }
+    #endif
+}
+
+// TODO: Clean up.
+//// Configure the Peer Manager so that it manages security, pairing and bonding.
+////
+//// This could be called multiple times.
+//static uint32_t configure_peer_manager(void) {
+//    DEBUG_printf("configure_peer_manager\n");
+//
+//    // Call pm_sec_params_set().
+//    uint32_t err_code = set_peer_manager_sec_params();
+//
+//    if (err_code == NRF_SUCCESS) {
+//        // It is not possible to unregister a peer manager event handler.
+//        // So register the event handler only once.
+//        if (!m_peer_manager_state.is_peer_manager_event_handler_registered) {
+//            err_code = pm_register(peer_manager_event_handler);
+//
+//            if (err_code == NRF_SUCCESS) {
+//                m_peer_manager_state.is_peer_manager_event_handler_registered = 1;
+//            }
+//        }
+//    }
+//
+//    // TODO: Clean up.
+////    #if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+////    if (err_code == NRF_SUCCESS) {
+////        if (!m_peer_manager_state.is_periodic_lesc_py_soft_timer_registered) {
+////            register_periodic_lesc_py_soft_timer();
+////            m_peer_manager_state.is_periodic_lesc_py_soft_timer_registered = 1;
+////        }
+////    }
+////    #endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+//
+//    DEBUG_printf("return 0x%lx\n", err_code);
+//
+//    return err_code;
+//}
+
+// De-configure the Peer Manager so that security requests are rejected.
+static void deconfigure_peer_manager(void) {
+    DEBUG_printf("deconfigure_peer_manager\n");
+
+    // TODO: Clean up.
+//    #if NRF_MODULE_ENABLED(NRF_BLE_LESC)
+//    if (m_peer_manager_state.is_periodic_lesc_py_soft_timer_registered) {
+//        deregister_periodic_lesc_py_soft_timer();
+//        m_peer_manager_state.is_periodic_lesc_py_soft_timer_registered = 0;
+//    }
+//    #endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+
+    (void)pm_sec_params_set(NULL);
+
+    DEBUG_printf("return\n");
+}
+
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+
+#if USE_NRF_SDK_COMPONENTS
+
+static uint32_t mbt_peer_manager_init(void) {
+
+    uint32_t err_code = NRF_SUCCESS;
+
+    if (!m_peer_manager_state.is_peer_manager_initialized) {
+        // pm_init() shall be called only once because it doesn't
+        // check if it is already initialized.
+        //
+        // All pairing and bonding procedures that are initiated by the peer
+        // are rejected until pm_sec_params_set() is called.
+        err_code = pm_init();
+
+        if (err_code == NRF_SUCCESS) {
+            m_peer_manager_state.is_peer_manager_initialized = 1;
+        }
+
+        DEBUG_printf("pm_init(): 0x%lx\n", err_code);
+
+        #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+        if (err_code == NRF_SUCCESS) {
+            // It is not possible to unregister a peer manager event handler.
+            // So register the event handler only once.
+            if (!m_peer_manager_state.is_peer_manager_event_handler_registered) {
+                err_code = pm_register(peer_manager_event_handler);
+
+                if (err_code == NRF_SUCCESS) {
+                    m_peer_manager_state.is_peer_manager_event_handler_registered = 1;
+                }
+
+                DEBUG_printf("pm_register(): 0x%lx\n", err_code);
+            }
+        }
+        #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+        // TODO: Erase nRF Flash Data Storage pages in case that pm_init() returns an error.
+    }
+
+    return err_code;
+}
+#endif // USE_NRF_SDK_COMPONENTS
+
 //////////////////////////////////////////////////////////////
 // API implemented by ports (i.e. called from modbluetooth.c):
 
@@ -472,8 +819,6 @@ int mp_bluetooth_init(void) {
     memset(m_scan_buffer, 0, sizeof(m_scan_buffer));
 
     #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
-    // TODO: Experimental.
-
     memset(&m_security_config, 0, sizeof(m_security_config));
     m_security_config.io_capability = MP_BLUETOOTH_IO_CAPABILITY_NO_INPUT_OUTPUT;
     #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
@@ -502,9 +847,13 @@ int mp_bluetooth_init(void) {
         ble_enable_params.gatts_enable_params.attr_tab_size = BLE_GATTS_ATTR_TAB_SIZE_DEFAULT;
         ble_enable_params.gatts_enable_params.service_changed = 0;
     }
-    #else
+    #else // (BLUETOOTH_SD == 110)
     ble_cfg_t ble_conf;
+
+    // TODO: Set app_ram_start_cfg from linker symbol instead of literal value.
     const uint32_t app_ram_start_cfg = 0x200039c0;
+
+    DEBUG_printf("app_ram_start_cfg: 0x%lx\n", app_ram_start_cfg);
 
     if (err_code == NRF_SUCCESS) {
         memset(&ble_conf, 0, sizeof(ble_conf));
@@ -563,12 +912,12 @@ int mp_bluetooth_init(void) {
         memset(&ble_conf, 0, sizeof(ble_conf));
 
         ble_conf.conn_cfg.conn_cfg_tag = BLE_MODBLUETOOTH_CONN_CONFIG_TAG;
-        ble_conf.conn_cfg.params.gatt_conn_cfg.att_mtu = MP_BLUETOOTH_MAX_ATT_MTU;
+        ble_conf.conn_cfg.params.gatt_conn_cfg.att_mtu = NRF_SDH_BLE_GATT_MAX_MTU_SIZE;
         err_code = sd_ble_cfg_set(BLE_CONN_CFG_GATT, &ble_conf, app_ram_start_cfg);
 
         DEBUG_printf("sd_ble_cfg_set(BLE_CONN_CFG_GATT): %lu\n", err_code);
     }
-    #endif
+    #endif // (BLUETOOTH_SD == 110)
 
     #if (BLUETOOTH_SD == 110)
     if (err_code == NRF_SUCCESS) {
@@ -576,13 +925,19 @@ int mp_bluetooth_init(void) {
     }
     #else
     if (err_code == NRF_SUCCESS) {
-        DEBUG_printf("app_ram_start_cfg: 0x%04lx\n", app_ram_start_cfg);
         uint32_t app_ram_start = app_ram_start_cfg;
-        err_code = sd_ble_enable(&app_ram_start); // 8K SD headroom from linker script.
+
+        #if USE_NRF_SDK_COMPONENTS
+        err_code = nrf_sdh_ble_enable(&app_ram_start);
+        #else // USE_NRF_SDK_COMPONENTS
+        err_code = sd_ble_enable(&app_ram_start);
+        #endif // USE_NRF_SDK_COMPONENTS
+
+        DEBUG_printf("app_ram_start: 0x%lx\n", app_ram_start);
     }
     #endif
 
-    DEBUG_printf("sd_ble_enable(): %lu\n", err_code);
+    DEBUG_printf("sd_ble_enable(): 0x%lx\n", err_code);
 
     if (err_code == NRF_SUCCESS) {
         m_is_ble_enabled = true;
@@ -602,9 +957,31 @@ int mp_bluetooth_init(void) {
         DEBUG_printf("sd_ble_gap_ppcp_set(): %lu\n", err_code);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    #if USE_NRF_SDK_COMPONENTS
+    if (err_code == NRF_SUCCESS) {
+        // TODO: Clean up.
+//        if (!m_peer_manager_state.is_peer_manager_initialized) {
+//            // pm_init() shall be called only once because it doesn't
+//            // check if it is already initialized.
+//            //
+//            // All pairing and bonding procedures that are initiated by the peer
+//            // are rejected until pm_sec_params_set() is called.
+//            err_code = pm_init();
+//
+//            if (err_code == NRF_SUCCESS) {
+//                m_peer_manager_state.is_peer_manager_initialized = 1;
+//            }
+//
+//            // TODO: Erase nRF Flash Data Storage pages in case that pm_init() returns an error.
+//        }
+
+        err_code = mbt_peer_manager_init();
+    }
+    #endif // USE_NRF_SDK_COMPONENTS
+
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Disables the Bluetooth stack. Is a no-op when not enabled.
@@ -619,6 +996,10 @@ void mp_bluetooth_deinit(void) {
     if (!m_is_ble_enabled) {
         return;
     }
+
+    #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    deconfigure_peer_manager();
+    #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
     softdevice_drv_disable();
 
@@ -668,23 +1049,33 @@ void mp_bluetooth_get_current_address(uint8_t *addr_type, uint8_t *addr) {
 void mp_bluetooth_set_address_mode(uint8_t addr_mode) {
     DEBUG_printf("mp_bluetooth_set_address_mode: MP_EOPNOTSUPP\n");
 
+    // See description of sd_ble_gap_addr_set():
+    // ...
     // By default the SoftDevice will set an address of type
     // BLE_GAP_ADDR_TYPE_RANDOM_STATIC upon being enabled.
     // The address is a random number populated during the
     // IC manufacturing process and remains unchanged for the
     // lifetime of each IC.
+    //
+    // See also description of pm_id_addr_set():
+    // ...
+    // The SoftDevice functions sd_ble_gap_addr_set and sd_ble_gap_privacy_set
+    // must not be called when using the Peer Manager. Use the Peer Manager
+    // equivalents instead.
     mp_raise_OSError(MP_EOPNOTSUPP);
 }
 
 
 #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
-// TODO: Experimental.
-
 // Set bonding flag in pairing requests (i.e. persist security keys).
 void mp_bluetooth_set_bonding(bool enabled) {
     DEBUG_printf("mp_bluetooth_set_bonding: %u\n", (uint16_t)enabled);
 
     m_security_config.bonding = (enabled ? 1 : 0);
+
+    // TODO: experimental
+//    configure_peer_manager();
+    set_peer_manager_sec_params();
 }
 
 // Require MITM protection.
@@ -692,23 +1083,38 @@ void mp_bluetooth_set_mitm_protection(bool enabled) {
     DEBUG_printf("mp_bluetooth_set_mitm_protection: %u\n", (uint16_t)enabled);
 
     m_security_config.mitm_protection = (enabled ? 1 : 0);
+
+    // TODO: experimental
+//    configure_peer_manager();
+    set_peer_manager_sec_params();
 }
 
 // Require LE Secure pairing (rather than Legacy Pairing)
 void mp_bluetooth_set_le_secure(bool enabled) {
     DEBUG_printf("mp_bluetooth_set_le_secure: %u\n", (uint16_t)enabled);
 
+    #if NRF_MODULE_ENABLED(NRF_BLE_LESC)
     m_security_config.le_secure = (enabled ? 1 : 0);
+
+    // TODO: experimental
+//    configure_peer_manager();
+    set_peer_manager_sec_params();
+    #else // NRF_MODULE_ENABLED(NRF_BLE_LESC)
+    if (enabled) {
+        mp_raise_OSError(MP_EOPNOTSUPP);
+    }
+    #endif // NRF_MODULE_ENABLED(NRF_BLE_LESC)
 }
 
 // I/O capabilities for authentication (see MP_BLUETOOTH_IO_CAPABILITY_*).
-//
-// Note:
-// Only MP_BLUETOOTH_IO_CAPABILITY_NO_INPUT_OUTPUT is supported.
 void mp_bluetooth_set_io_capability(uint8_t capability) {
     DEBUG_printf("mp_bluetooth_set_io_capability: %u\n", (uint16_t)capability);
 
     m_security_config.io_capability = capability;
+
+    // TODO: experimental
+//    configure_peer_manager();
+    set_peer_manager_sec_params();
 }
 
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
@@ -735,9 +1141,9 @@ int mp_bluetooth_gap_set_device_name(const uint8_t *buf, size_t len) {
 
     uint32_t err_code = sd_ble_gap_device_name_set(&sec_mode, buf, len);
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Start advertisement. Will re-start advertisement when already enabled.
@@ -857,9 +1263,9 @@ int mp_bluetooth_gap_advertise_start(bool connectable, int32_t interval_us, cons
         m_adv_in_progress = true;
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Stop advertisement. No-op when already stopped.
@@ -901,17 +1307,17 @@ int mp_bluetooth_gatts_register_service_begin(bool append) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
 
-    int errno = 0;
+    int errno_result = 0;
 
     if (!append) {
         if (m_services_registered) {
             // SoftDevice doesn't support reset of registry.
-            errno = MP_EOPNOTSUPP;
+            errno_result = MP_EOPNOTSUPP;
         }
     }
 
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // uint32_t mp_uuid_to_ble_uuid_with_vs_add(const mp_obj_bluetooth_uuid_t *mp_uuid, ble_uuid_t *ble_uuid) {
@@ -1276,9 +1682,9 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
         characteristic_index++;
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Register any queued services.
@@ -1347,9 +1753,9 @@ int mp_bluetooth_gatts_read(uint16_t value_handle, const uint8_t **value, size_t
         }
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Write a value to the local gatts db (ready to be queried by a central). Optionally send notifications/indications.
@@ -1430,9 +1836,9 @@ int mp_bluetooth_gatts_write(uint16_t value_handle, const uint8_t *value, size_t
         err_code = sd_ble_gatts_value_set(BLE_CONN_HANDLE_INVALID, value_handle, &ble_gatts_value);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Send a notification/indication to the central, optionally with custom payload (otherwise the DB value is used).
@@ -1476,9 +1882,9 @@ int mp_bluetooth_gatts_notify_indicate(uint16_t conn_handle, uint16_t value_hand
         err_code = sd_ble_gatts_hvx(conn_handle, &hvx_params);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Resize and enable/disable append-mode on a value.
@@ -1506,9 +1912,9 @@ int mp_bluetooth_gap_disconnect(uint16_t conn_handle) {
 
     uint32_t err_code = sd_ble_gap_disconnect(conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Get the MTU that we will respond to a MTU exchange with.
@@ -1520,48 +1926,20 @@ int mp_bluetooth_get_preferred_mtu(void) {
 int mp_bluetooth_set_preferred_mtu(uint16_t mtu) {
     DEBUG_printf("mp_bluetooth_set_preferred_mtu\n");
 
-    int errno = 0;
+    int errno_result = 0;
 
-    if (mtu < BLE_GATT_ATT_MTU_DEFAULT || mtu > MP_BLUETOOTH_MAX_ATT_MTU) {
-        errno = MP_EINVAL;
+    if (mtu < BLE_GATT_ATT_MTU_DEFAULT || mtu > NRF_SDH_BLE_GATT_MAX_MTU_SIZE) {
+        errno_result = MP_EINVAL;
     } else {
         m_prefered_mtu = mtu;
     }
 
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 
 #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
-
-static uint32_t ble_gap_authenticate(uint16_t conn_handle) {
-    ble_gap_sec_params_t sec_params;
-    memset(&sec_params, 0, sizeof(sec_params));
-
-    sec_params.min_key_size = 7;
-    sec_params.max_key_size = 16;
-
-    // TODO: Experimental.
-    sec_params.bond = m_security_config.bonding;
-    sec_params.mitm = m_security_config.mitm_protection;
-    sec_params.lesc = m_security_config.le_secure;
-    sec_params.io_caps = m_security_config.io_capability;
-
-    // TODO: Experimental.
-    sec_params.kdist_peer.enc = 1;
-    sec_params.kdist_peer.id = 1;
-
-    // returns NRF_ERROR_NOT_SUPPORTED
-//    sec_params.kdist_peer.sign = 1;
-//    sec_params.kdist_peer.link = 1;
-
-    uint32_t err_code = sd_ble_gap_authenticate(conn_handle, &sec_params);
-
-    DEBUG_printf("ble_gap_authenticate: return 0x%04lx\n", err_code);
-
-    return err_code;
-}
 
 // Initiate pairing on the specified connection.
 int mp_bluetooth_gap_pair(uint16_t conn_handle) {
@@ -1571,19 +1949,80 @@ int mp_bluetooth_gap_pair(uint16_t conn_handle) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
 
-    uint32_t err_code = ble_gap_authenticate(conn_handle);
+    // TODO: Clean up.
+//    uint32_t err_code = configure_peer_manager();
+//
+//    if (err_code == NRF_SUCCESS) {
+//        err_code = pm_conn_secure(conn_handle, false);
+//    }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    // Always do the bonding process in case that bonding is set.
+    // I.e. if there is a stored bond the bonding process will be
+    // circumvented only if bonding is not set.
+    bool force_re_pair = m_security_config.bonding ? true : false;
+
+    uint32_t err_code = pm_conn_secure(conn_handle, force_re_pair);
+
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Respond to a pairing request.
 int mp_bluetooth_gap_passkey(uint16_t conn_handle, uint8_t action, mp_int_t passkey) {
-    DEBUG_printf("mp_bluetooth_gap_passkey: conn_handle=%u, action=%u passkey=%d\n",
+
+    DEBUG_printf("mp_bluetooth_gap_passkey: conn_handle=%u, action=%u, passkey=%d\n",
         conn_handle, (uint16_t)action, passkey);
 
-    return MP_EOPNOTSUPP;
+    uint32_t err_code = NRF_SUCCESS;
+
+    uint8_t key_type = BLE_GAP_AUTH_KEY_TYPE_NONE;
+    uint8_t *p_key = NULL;
+
+    char passkey_string[7];
+    memset(passkey_string, 0, sizeof(passkey_string));
+
+    switch (action) {
+        case MP_BLUETOOTH_PASSKEY_ACTION_NONE: {
+            // Reject authentication.
+            break;
+        }
+
+        case MP_BLUETOOTH_PASSKEY_ACTION_INPUT: {
+
+            int passkey_char_count_needed = snprintf(
+                    passkey_string, sizeof(passkey_string), "%06u", (unsigned)passkey);
+
+            if (passkey_char_count_needed >= sizeof(passkey_string)) {
+                err_code = NRF_ERROR_INVALID_PARAM;
+            }
+            else {
+                key_type = BLE_GAP_AUTH_KEY_TYPE_PASSKEY;
+                p_key = (uint8_t *)passkey_string;
+            }
+
+            break;
+        }
+
+        case MP_BLUETOOTH_PASSKEY_ACTION_NUMERIC_COMPARISON: {
+            if (passkey != 0) {
+                key_type = BLE_GAP_AUTH_KEY_TYPE_PASSKEY;
+            }
+            break;
+        }
+
+        default: {
+            err_code = NRF_ERROR_INVALID_PARAM;
+        }
+    }
+
+    if (err_code == NRF_SUCCESS) {
+        err_code = sd_ble_gap_auth_key_reply(conn_handle, key_type, p_key);
+    }
+
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
@@ -1682,9 +2121,9 @@ int mp_bluetooth_gap_scan_start(int32_t duration_ms, int32_t interval_us, int32_
         m_variable_scan_params.scan_in_progress = 1;
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Stop discovery (if currently active).
@@ -1706,9 +2145,9 @@ int mp_bluetooth_gap_scan_stop(void) {
         err_code = NRF_SUCCESS;
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Connect to a found peripheral.
@@ -1773,9 +2212,9 @@ int mp_bluetooth_gap_peripheral_connect(uint8_t addr_type, const uint8_t *addr, 
         m_variable_scan_params.scan_in_progress = 0;
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Cancel in-progress connection to a peripheral.
@@ -1788,9 +2227,9 @@ int mp_bluetooth_gap_peripheral_connect_cancel(void) {
 
     uint32_t err_code = sd_ble_gap_connect_cancel();
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
@@ -1834,9 +2273,9 @@ int mp_bluetooth_gattc_discover_primary_services(uint16_t conn_handle, const mp_
         err_code = sd_ble_gattc_primary_services_discover(conn_handle, start_handle, p_ble_service_uuid);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Find all characteristics on the specified service on a connected peripheral.
@@ -1884,9 +2323,9 @@ int mp_bluetooth_gattc_discover_characteristics(uint16_t conn_handle, uint16_t s
         err_code = sd_ble_gattc_characteristics_discover(conn_handle, p_char_discovery_range);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Find all descriptors on the specified characteristic on a connected peripheral.
@@ -1922,9 +2361,9 @@ int mp_bluetooth_gattc_discover_descriptors(uint16_t conn_handle, uint16_t start
         err_code = sd_ble_gattc_descriptors_discover(conn_handle, p_desc_discovery_range);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Initiate read of a value from the remote peripheral.
@@ -1945,9 +2384,9 @@ int mp_bluetooth_gattc_read(uint16_t conn_handle, uint16_t value_handle) {
     const uint16_t offset = 0;
     uint32_t err_code = sd_ble_gattc_read(conn_handle, value_handle, offset);
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Write the value to the remote peripheral.
@@ -1982,9 +2421,9 @@ int mp_bluetooth_gattc_write(uint16_t conn_handle, uint16_t value_handle, const 
         err_code = sd_ble_gattc_write(conn_handle, &write_params);
     }
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 
 // Initiate MTU exchange for a specific connection using the preferred MTU.
@@ -1997,11 +2436,76 @@ int mp_bluetooth_gattc_exchange_mtu(uint16_t conn_handle) {
 
     uint32_t err_code = sd_ble_gattc_exchange_mtu_request(conn_handle, m_prefered_mtu);
 
-    int errno = nrf_error_to_errno(err_code);
-    DEBUG_printf("return %d\n", errno);
-    return errno;
+    int errno_result = nrf_error_to_errno(err_code);
+    DEBUG_printf("return %d\n", errno_result);
+    return errno_result;
 }
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT
+
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+// TODO: Clean up.
+
+// Convert a pass key array from a ble_gap_evt_passkey_display_t struct
+// to an unsigned integer value.
+//
+// Result:
+// true: Conversion was successful.
+// false: Conversion failed.
+//bool passkey_to_value(const uint8_t passkey[6], unsigned int *p_result_value) {
+//
+//    int assignment_count = sscanf(
+//            (const char *)passkey, "%6u", p_result_value);
+//
+//    bool result = assignment_count == 1 ? true : false;
+//
+//    return result;
+//}
+
+// Convert a pass key array from a ble_gap_evt_passkey_display_t struct
+// to an unsigned integer value.
+//
+// Result:
+// true: Conversion was successful.
+// false: Conversion failed.
+//bool passkey_to_value(const uint8_t passkey[6], unsigned int *p_result_value) {
+//
+//    // Create a null terminated string from passkey.
+//    char passkey_string[7];
+//    memcpy(passkey_string, passkey, 6);
+//    passkey_string[6] = '\0';
+//
+//    long int long_result_value = strtol(passkey_string, NULL, 10);
+//
+//    bool result = false;
+//
+//    if (long_result_value >= 0 && long_result_value <= UINT_MAX) {
+//        *p_result_value = (unsigned int)long_result_value;
+//        result = true;
+//    }
+//
+//    return result;
+//}
+
+// Convert a pass key array from a ble_gap_evt_passkey_display_t struct
+// to an integer value.
+void passkey_to_value(const uint8_t passkey[6], int *p_result_value) {
+
+    int result_value = 0;
+
+    for (int passkey_index = 0; passkey_index < 6; passkey_index++) {
+        int digit_value = (char)passkey[passkey_index] - '0';
+
+        if (digit_value >= 0 && digit_value <= 9) {
+            result_value = result_value * 10 + digit_value;
+        }
+    }
+
+    *p_result_value = result_value;
+}
+
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 
 #define MP_ADV_TYPE_CONN_IND (0)
@@ -2029,7 +2533,14 @@ uint8_t ble_gap_adv_report_type_to_mp_adv_type(ble_gap_adv_report_type_t ble_gap
     return result;
 }
 
-static void ble_evt_handler(ble_evt_t *p_ble_evt) {
+// called from softdevice_drv.c
+void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
+
+    #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    // TODO: Experimental.
+//    pm_handler_secure_on_connection(p_ble_evt);
+    #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
     switch (p_ble_evt->header.evt_id) {
         case BLE_GAP_EVT_CONNECTED: {
             DEBUG_printf("BLE_GAP_EVT_CONNECTED - min_conn_interval: %u, max_conn_interval: %u, slave_latency: %u, conn_sup_timeout: %u\n",
@@ -2092,7 +2603,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
         case BLE_GAP_EVT_CONN_PARAM_UPDATE: {
             DEBUG_printf("BLE_GAP_EVT_CONN_PARAM_UPDATE\n");
 
-            ble_gap_conn_params_t *p_conn_params = &(p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params);
+            const ble_gap_conn_params_t *p_conn_params = &(p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params);
 
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
@@ -2161,9 +2672,12 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
 
             #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
+        // The following events are handled by the Peer Manager.
+        // They are handled here to print debug information.
+
         case BLE_GAP_EVT_AUTH_STATUS: {
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            ble_gap_evt_auth_status_t *p_auth_status = &(p_ble_evt->evt.gap_evt.params.auth_status);
+            const ble_gap_evt_auth_status_t *p_auth_status = &(p_ble_evt->evt.gap_evt.params.auth_status);
 
             DEBUG_printf("BLE_GAP_EVT_AUTH_STATUS - conn_handle: %u, auth_status: 0x%02x, error_src: 0x%02x, bonded: %u, lesc: %u, " \
                 "kdist_own: enc=%u, id=%u, sign=%u, link=%u, kdist_peer: enc=%u, id=%u, sign=%u, link=%u\n",
@@ -2178,75 +2692,43 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
 
         case BLE_GAP_EVT_SEC_REQUEST: {
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            ble_gap_evt_sec_request_t *p_sec_request = &(p_ble_evt->evt.gap_evt.params.sec_request);
+            const ble_gap_evt_sec_request_t *p_sec_request = &(p_ble_evt->evt.gap_evt.params.sec_request);
 
-            // TODO: Experimental
-
-            DEBUG_printf("BLE_GAP_EVT_SEC_REQUEST (ignored) - conn_handle: %u, bond: %u, mitm: %u, lesc: %u, keypress: %u\n",
+            DEBUG_printf("BLE_GAP_EVT_SEC_REQUEST - conn_handle: %u, bond: %u, mitm: %u, lesc: %u, keypress: %u\n",
                 conn_handle, (uint16_t)p_sec_request->bond, (uint16_t)p_sec_request->mitm,
                 (uint16_t)p_sec_request->lesc, (uint16_t)p_sec_request->keypress);
-
-//            // Trigger pairing
-//            ble_gap_authenticate(conn_handle);
             break;
         }
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST: {
-            // Peripheral responded to mp_bluetooth_gap_pair().
-
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
-            ble_gap_sec_params_t *p_peer_params =
+            const ble_gap_sec_params_t *p_peer_params =
                 &(p_ble_evt->evt.gap_evt.params.sec_params_request.peer_params);
 
-            DEBUG_printf("BLE_GAP_EVT_SEC_PARAMS_REQUEST - conn_handle: %u, bond: %u, mitm: %u, lesc: %u, keypress: %u, io_caps: 0x%02x\n",
+            DEBUG_printf("BLE_GAP_EVT_SEC_PARAMS_REQUEST - conn_handle: %u, bond: %u, mitm: %u, lesc: %u, keypress: %u, io_caps: 0x%02x\n" \
+                "kdist_own: enc=%u, id=%u, sign=%u, link=%u, kdist_peer: enc=%u, id=%u, sign=%u, link=%u\n",
                 conn_handle,
                 (uint16_t)p_peer_params->bond,
                 (uint16_t)p_peer_params->mitm,
                 (uint16_t)p_peer_params->lesc,
                 (uint16_t)p_peer_params->keypress,
-                (uint16_t)p_peer_params->io_caps);
-
-            uint8_t sec_status = BLE_GAP_SEC_STATUS_SUCCESS;
-
-            ble_gap_sec_keyset_t sec_keyset;
-            memset(&sec_keyset, 0, sizeof(sec_keyset));
-
-            // TODO: Experimental
-
-//            // Pairing / bonding is only supported in the Central role.
-//            if (m_connection_handle_info[conn_handle].role != BLE_GAP_ROLE_CENTRAL) {
-//                sec_status = BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP;
-//            }
-//
-//            if (sec_status == BLE_GAP_SEC_STATUS_SUCCESS) {
-//                if (p_peer_params->bond || p_peer_params->mitm || p_peer_params->lesc) {
-//                    sec_status = BLE_GAP_SEC_STATUS_INVALID_PARAMS;
-//                }
-//            }
-
-            if (sec_status == BLE_GAP_SEC_STATUS_SUCCESS) {
-                sec_keyset.keys_peer.p_enc_key =
-                    &(m_connection_handle_info[conn_handle].enc_key);
-                sec_keyset.keys_peer.p_id_key =
-                    &(m_connection_handle_info[conn_handle].id_key);
-                sec_keyset.keys_peer.p_sign_key =
-                    &(m_connection_handle_info[conn_handle].sign_key);
-                sec_keyset.keys_peer.p_pk =
-                    &(m_connection_handle_info[conn_handle].pk);
-            }
-
-            uint32_t err_code = sd_ble_gap_sec_params_reply(
-                conn_handle, sec_status, NULL, &sec_keyset);
-
-            DEBUG_printf("sd_ble_gap_sec_params_reply() - result: %lu\n", err_code);
+                (uint16_t)p_peer_params->io_caps,
+                (uint16_t)p_peer_params->kdist_own.enc,
+                (uint16_t)p_peer_params->kdist_own.id,
+                (uint16_t)p_peer_params->kdist_own.sign,
+                (uint16_t)p_peer_params->kdist_own.link,
+                (uint16_t)p_peer_params->kdist_peer.enc,
+                (uint16_t)p_peer_params->kdist_peer.id,
+                (uint16_t)p_peer_params->kdist_peer.sign,
+                (uint16_t)p_peer_params->kdist_peer.link);
             break;
         }
 
         case BLE_GAP_EVT_CONN_SEC_UPDATE: {
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
-            ble_gap_conn_sec_t *p_conn_sec =
+            const ble_gap_conn_sec_t *p_conn_sec =
                 &(p_ble_evt->evt.gap_evt.params.conn_sec_update.conn_sec);
 
             DEBUG_printf("BLE_GAP_EVT_CONN_SEC_UPDATE - sm: %u, lv: %u, encr_key_size: %u\n",
@@ -2271,9 +2753,90 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
             // Call this when any connection encryption has been changed (e.g. during pairing).
             mp_bluetooth_gatts_on_encryption_update(
                 conn_handle, encrypted, authenticated, bonded, key_size);
+
             break;
         }
+
+        case BLE_GAP_EVT_PASSKEY_DISPLAY: {
+            uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+
+            const ble_gap_evt_passkey_display_t *p_passkey_display =
+                    &(p_ble_evt->evt.gap_evt.params.passkey_display);
+
+            int passkey_value = 0;
+
+            passkey_to_value(p_passkey_display->passkey, &passkey_value);
+
+            DEBUG_printf(
+                    "BLE_GAP_EVT_PASSKEY_DISPLAY - conn_handle: %u, " \
+                    "passkey: %.6s,  match_request: %u, " \
+                    "passkey_value: %u\n",
+                    conn_handle,
+                    (char *)p_passkey_display->passkey,
+                    (uint16_t)p_passkey_display->match_request,
+                    (uint16_t)passkey_value);
+
+            uint8_t action = p_passkey_display->match_request ?
+                    MP_BLUETOOTH_PASSKEY_ACTION_NUMERIC_COMPARISON :
+                    MP_BLUETOOTH_PASSKEY_ACTION_DISPLAY;
+
+            mp_bluetooth_gap_on_passkey_action(conn_handle, action, passkey_value);
+
+            break;
+        }
+
+        case BLE_GAP_EVT_AUTH_KEY_REQUEST: {
+            uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+
+            const ble_gap_evt_auth_key_request_t *p_auth_key_request =
+                    &(p_ble_evt->evt.gap_evt.params.auth_key_request);
+
+            DEBUG_printf(
+                    "BLE_GAP_EVT_AUTH_KEY_REQUEST - conn_handle: %u, " \
+                    "key_type: %u\n",
+                    conn_handle,
+                    (uint16_t)p_auth_key_request->key_type);
+
+            if (p_auth_key_request->key_type == BLE_GAP_AUTH_KEY_TYPE_PASSKEY) {
+                mp_bluetooth_gap_on_passkey_action(
+                        conn_handle, MP_BLUETOOTH_PASSKEY_ACTION_INPUT, 0);
+            }
+
+            break;
+        }
+
+        case BLE_GAP_EVT_LESC_DHKEY_REQUEST: {
+            uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+
+//            const ble_gap_evt_lesc_dhkey_request_t *p_lesc_dhkey_request =
+//                    &(p_ble_evt->evt.gap_evt.params.lesc_dhkey_request);
+
+            DEBUG_printf(
+                    "BLE_GAP_EVT_LESC_DHKEY_REQUEST - conn_handle: %u\n",
+                    conn_handle);
+
+            // TODO: Test
+            m_is_lesc_dhkey_request_pendig = true;
+            break;
+        }
+
             #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+
+            #if !USE_NRF_SDK_COMPONENTS
+
+        case BLE_GAP_EVT_SEC_PARAMS_REQUEST: {
+            DEBUG_printf("BLE_GAP_EVT_SEC_PARAMS_REQUEST\n");
+
+            uint16_t conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
+            // pairing not supported
+            (void)sd_ble_gap_sec_params_reply(conn_handle,
+                                              BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP,
+                                              NULL, NULL);
+            break;
+        }
+
+            #endif // !USE_NRF_SDK_COMPONENTS
+
 
         #if (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
         case BLE_GATTS_EVT_HVN_TX_COMPLETE: {
@@ -2287,21 +2850,10 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
         }
         #endif
 
-//        case BLE_GAP_EVT_SEC_PARAMS_REQUEST: {
-//            DEBUG_printf("BLE_GAP_EVT_SEC_PARAMS_REQUEST\n");
-//
-//            uint16_t conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
-//            // pairing not supported
-//            (void)sd_ble_gap_sec_params_reply(conn_handle,
-//                                              BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP,
-//                                              NULL, NULL);
-//            break;
-//        }
-
             #if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
 
         case BLE_GAP_EVT_ADV_REPORT: {
-            ble_gap_evt_adv_report_t *p_adv_report = &(p_ble_evt->evt.gap_evt.params.adv_report);
+            const ble_gap_evt_adv_report_t *p_adv_report = &(p_ble_evt->evt.gap_evt.params.adv_report);
 
             DEBUG_printf("BLE_GAP_EVT_ADV_REPORT - connectable: %u, scannable: %u, directed: %u, scan_response: %u, status: 0x%02x\n",
                 (uint16_t)p_adv_report->type.connectable,
@@ -2348,7 +2900,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
                 uint16_t end_handle = 0xffff;
 
                 for (uint16_t i = 0; i < p_ble_evt->evt.gattc_evt.params.prim_srvc_disc_rsp.count; i++) {
-                    ble_gattc_service_t *p_service = &(p_ble_evt->evt.gattc_evt.params.prim_srvc_disc_rsp.services[i]);
+                    const ble_gattc_service_t *p_service = &(p_ble_evt->evt.gattc_evt.params.prim_srvc_disc_rsp.services[i]);
 
                     uint16_t start_handle = p_service->handle_range.start_handle;
                     end_handle = p_service->handle_range.end_handle;
@@ -2421,7 +2973,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
                 uint16_t last_value_handle = 0xffff;
 
                 for (uint16_t i = 0; i < p_ble_evt->evt.gattc_evt.params.char_disc_rsp.count; i++) {
-                    ble_gattc_char_t *p_char = &(p_ble_evt->evt.gattc_evt.params.char_disc_rsp.chars[i]);
+                    const ble_gattc_char_t *p_char = &(p_ble_evt->evt.gattc_evt.params.char_disc_rsp.chars[i]);
 
                     // end_handle should be the handle of the last characteristic descriptor
                     // of this characteristic if there is one. Otherwise end_handle should
@@ -2516,7 +3068,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
                 uint16_t last_desc_handle = 0xffff;
 
                 for (uint16_t i = 0; i < p_ble_evt->evt.gattc_evt.params.desc_disc_rsp.count; i++) {
-                    ble_gattc_desc_t *p_desc = &(p_ble_evt->evt.gattc_evt.params.desc_disc_rsp.descs[i]);
+                    const ble_gattc_desc_t *p_desc = &(p_ble_evt->evt.gattc_evt.params.desc_disc_rsp.descs[i]);
 
                     uint16_t desc_handle = p_desc->handle;
 
@@ -2577,7 +3129,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
         }
 
         case BLE_GATTC_EVT_READ_RSP: {
-            ble_gattc_evt_read_rsp_t *p_read_rsp = &(p_ble_evt->evt.gattc_evt.params.read_rsp);
+            const ble_gattc_evt_read_rsp_t *p_read_rsp = &(p_ble_evt->evt.gattc_evt.params.read_rsp);
 
             DEBUG_printf("BLE_GATTC_EVT_READ_RSP, offset: 0x%02x, length: 0x%02x\n",
                 p_read_rsp->offset,
@@ -2605,7 +3157,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
         case BLE_GATTC_EVT_WRITE_RSP: {
             DEBUG_printf("BLE_GATTC_EVT_WRITE_RSP\n");
 
-            ble_gattc_evt_write_rsp_t *p_write_rsp = &(p_ble_evt->evt.gattc_evt.params.write_rsp);
+            const ble_gattc_evt_write_rsp_t *p_write_rsp = &(p_ble_evt->evt.gattc_evt.params.write_rsp);
 
             uint16_t conn_handle = p_ble_evt->evt.gattc_evt.conn_handle;
             uint16_t gatt_status = p_ble_evt->evt.gattc_evt.gatt_status;
@@ -2620,7 +3172,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
         case BLE_GATTC_EVT_HVX: {
             DEBUG_printf("BLE_GATTC_EVT_HVX\n");
 
-            ble_gattc_evt_hvx_t *p_hvx = &(p_ble_evt->evt.gattc_evt.params.hvx);
+            const ble_gattc_evt_hvx_t *p_hvx = &(p_ble_evt->evt.gattc_evt.params.hvx);
 
             uint16_t conn_handle = p_ble_evt->evt.gattc_evt.conn_handle;
             uint16_t gatt_status = p_ble_evt->evt.gattc_evt.gatt_status;
@@ -2703,7 +3255,7 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
         #endif // (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
 
         case BLE_GAP_EVT_TIMEOUT: {
-            ble_gap_evt_timeout_t *p_timeout = &(p_ble_evt->evt.gap_evt.params.timeout);
+            const ble_gap_evt_timeout_t *p_timeout = &(p_ble_evt->evt.gap_evt.params.timeout);
 
             DEBUG_printf("BLE_GAP_EVT_TIMEOUT, conn_handle: %u, src: %u\n",
                 p_ble_evt->evt.gap_evt.conn_handle,
@@ -2721,43 +3273,6 @@ static void ble_evt_handler(ble_evt_t *p_ble_evt) {
             DEBUG_printf(">>> unhandled evt: 0x%04x\n", p_ble_evt->header.evt_id);
             break;
         }
-    }
-}
-
-
-#if (BLUETOOTH_SD == 140)
-
-#define BLE_EVT_BUF_SIZE BLE_EVT_LEN_MAX(MP_BLUETOOTH_MAX_ATT_MTU)
-static uint8_t m_ble_evt_buf[BLE_EVT_BUF_SIZE] __attribute__ ((aligned(BLE_EVT_PTR_ALIGNMENT)));
-
-#else // #if (BLUETOOTH_SD == 140)
-
-static uint8_t m_ble_evt_buf[sizeof(ble_evt_t) + (MP_BLUETOOTH_MAX_ATT_MTU)] __attribute__ ((aligned(4)));
-
-#endif // #if (BLUETOOTH_SD == 140)
-
-
-// called from softdevice_drv.c
-void modbluetooth_irq_handler() {
-
-    while (1) {
-        uint16_t evt_len = sizeof(m_ble_evt_buf);
-        uint32_t err_code = sd_ble_evt_get(m_ble_evt_buf, &evt_len);
-        if (err_code != NRF_SUCCESS) {
-            // Possible error conditions:
-            //  * NRF_ERROR_NOT_FOUND: no events left, break
-            //  * NRF_ERROR_DATA_SIZE: retry with a bigger data buffer
-            //    (currently not handled, TODO)
-            //  * NRF_ERROR_INVALID_ADDR: pointer is not aligned, should
-            //    not happen.
-            // In all cases, it's best to simply stop now.
-            if (err_code == NRF_ERROR_DATA_SIZE) {
-                DEBUG_printf("NRF_ERROR_DATA_SIZE: sizeof(m_ble_evt_buf)=%u, needed size=%u\n", sizeof(m_ble_evt_buf), evt_len);
-            }
-            break;
-        }
-
-        ble_evt_handler((ble_evt_t *)m_ble_evt_buf);
     }
 }
 

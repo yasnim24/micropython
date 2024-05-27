@@ -22,8 +22,15 @@ else
 	$(error Incorrect softdevice set flag)
 endif
 
+
 ifneq ($(MICROPY_PY_BLUETOOTH),)
 	CFLAGS += -DMICROPY_PY_BLUETOOTH=$(MICROPY_PY_BLUETOOTH)
+endif
+
+USE_NRF_SDK_COMPONENTS ?= $(MICROPY_PY_BLUETOOTH)
+	
+ifneq ($(USE_NRF_SDK_COMPONENTS),)
+	CFLAGS += -DUSE_NRF_SDK_COMPONENTS=$(USE_NRF_SDK_COMPONENTS)
 endif
 
 
