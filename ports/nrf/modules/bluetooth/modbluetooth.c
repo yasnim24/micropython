@@ -100,8 +100,18 @@
 #include "extmod/modbluetooth.h"
 #include "modbluetooth.h"
 
-// TODO: Comment out printf() of DEBUG_printf() when debug is done.
-#define DEBUG_printf(...) printf("modbluetooth: " __VA_ARGS__)
+// TODO: Comment out DEBUG_MODBLUETOOTH when debug is done.
+//#define DEBUG_MODBLUETOOTH (1)
+
+#ifndef DEBUG_MODBLUETOOTH
+#define DEBUG_MODBLUETOOTH (0)
+#endif
+
+#if DEBUG_MODBLUETOOTH
+#define DEBUG_printf(...)  printf("modbluetooth: " __VA_ARGS__)
+#else
+#define DEBUG_printf(...) // printf("modbluetooth: " __VA_ARGS__)
+#endif
 
 
 #define ERRNO_BLUETOOTH_NOT_ACTIVE MP_ENODEV
@@ -2671,6 +2681,7 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
         }
 
             #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+            #if DEBUG_MODBLUETOOTH
 
         // The following events are handled by the Peer Manager.
         // They are handled here to print debug information.
@@ -2724,6 +2735,7 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
                 (uint16_t)p_peer_params->kdist_peer.link);
             break;
         }
+                #endif // DEBUG_MODBLUETOOTH
 
         case BLE_GAP_EVT_CONN_SEC_UPDATE: {
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
@@ -2806,6 +2818,7 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
         }
 
         case BLE_GAP_EVT_LESC_DHKEY_REQUEST: {
+            #if DEBUG_MODBLUETOOTH
             uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
 //            const ble_gap_evt_lesc_dhkey_request_t *p_lesc_dhkey_request =
@@ -2814,6 +2827,7 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
             DEBUG_printf(
                     "BLE_GAP_EVT_LESC_DHKEY_REQUEST - conn_handle: %u\n",
                     conn_handle);
+            #endif // DEBUG_MODBLUETOOTH
 
             // TODO: Test
             m_is_lesc_dhkey_request_pendig = true;
@@ -2838,17 +2852,19 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
             #endif // !USE_NRF_SDK_COMPONENTS
 
 
-        #if (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
+            #if DEBUG_MODBLUETOOTH
+            #if (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
         case BLE_GATTS_EVT_HVN_TX_COMPLETE: {
             DEBUG_printf("BLE_GATTS_EVT_HVN_TX_COMPLETE, count: %u\n", p_ble_evt->evt.gatts_evt.params.hvn_tx_complete.count);
             break;
         }
-        #else
+            #else
         case BLE_EVT_TX_COMPLETE: {
             DEBUG_printf("BLE_EVT_TX_COMPLETE, count: %u\n", p_ble_evt->evt.common_evt.params.tx_complete.count);
             break;
         }
-        #endif
+            #endif // (BLUETOOTH_SD == 132) || (BLUETOOTH_SD == 140)
+            #endif // DEBUG_MODBLUETOOTH
 
             #if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
 
@@ -2875,10 +2891,14 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
             // Notify modbluetooth of a scan result.
             mp_bluetooth_gap_on_scan_result(mp_addr_type, mp_addr, mp_adv_type, rssi, data, data_len);
 
+            #if DEBUG_MODBLUETOOTH
             // Continue scan.
             uint32_t err_code = ble_gap_scan_start_continue(NULL);
 
             DEBUG_printf("ble_gap_scan_start_continue(NULL) - result: %lu\n", err_code);
+            #else // DEBUG_MODBLUETOOTH
+            ble_gap_scan_start_continue(NULL);
+            #endif // DEBUG_MODBLUETOOTH
             break;
         }
 
@@ -3221,9 +3241,14 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
                 p_ble_evt->evt.gap_evt.params.data_length_update_request.peer_params.max_tx_time_us,
                 p_ble_evt->evt.gap_evt.params.data_length_update_request.peer_params.max_rx_time_us);
 
+            #if DEBUG_MODBLUETOOTH
             uint32_t err_code = sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, NULL, NULL);
 
             DEBUG_printf("sd_ble_gap_data_length_update() result: 0x%04lx\n", err_code);
+            #else // DEBUG_MODBLUETOOTH
+            sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, NULL, NULL);
+            #endif // DEBUG_MODBLUETOOTH
+
             break;
         }
 
