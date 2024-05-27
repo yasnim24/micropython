@@ -241,7 +241,7 @@
 #define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF   (1)
 #define MICROPY_EMERGENCY_EXCEPTION_BUF_SIZE  (0)
 
-// if sdk is in use, import configuration and enable some core features
+// if SoftDevice is in use, import configuration and enable some core features
 #if BLUETOOTH_SD
 #include "bluetooth_conf.h"
 #define MICROPY_BUILTIN_METHOD_CHECK_SELF_ARG (1)

@@ -43,7 +43,7 @@ endif
 
 ifeq ($(USE_NRF_SDK_COMPONENTS), 1)
 # include nRF5 SDK components
-LD_FILES += sdk/app.ld
+LD_FILES += sdk/$(NRF_SDK_VERSION)/app.ld
 endif
 
 LD_FILES += boards/memory.ld boards/common.ld
@@ -244,7 +244,7 @@ SRC_NRFX += $(addprefix lib/nrfx/drivers/src/,\
 
 ifeq ($(USE_NRF_SDK_COMPONENTS), 1)
 # include nRF5 SDK components
-include sdk/sdk.mk
+include sdk/$(NRF_SDK_VERSION)/sdk.mk
 endif
 
 SRC_C += \
