@@ -101,7 +101,7 @@
 #include "modbluetooth.h"
 
 // TODO: Comment out DEBUG_MODBLUETOOTH when debug is done.
-//#define DEBUG_MODBLUETOOTH (1)
+#define DEBUG_MODBLUETOOTH (1)
 
 #ifndef DEBUG_MODBLUETOOTH
 #define DEBUG_MODBLUETOOTH (0)
@@ -207,6 +207,8 @@
 #else
   #define HVN_TX_QUEUE_SIZE         (10)
 #endif
+
+extern uint32_t _ram_start;
 
 static bool m_is_ble_enabled = false;
 
@@ -850,6 +852,10 @@ int mp_bluetooth_init(void) {
         err_code = softdevice_drv_enable();
     }
 
+    #if (BLUETOOTH_SD == 140 && defined(BLUETOOTH_SD_7_2_0))
+    sd_ble_opt_set(BLE_GATTC_OPT_UUID_DISC, &(ble_opt_t){.gattc_opt.uuid_disc.auto_add_vs_enable = 1});
+    #endif
+
     #if (BLUETOOTH_SD == 110)
     if (err_code == NRF_SUCCESS) {
         ble_enable_params_t ble_enable_params;
@@ -860,12 +866,11 @@ int mp_bluetooth_init(void) {
     #else // (BLUETOOTH_SD == 110)
     ble_cfg_t ble_conf;
 
-    // TODO: Set app_ram_start_cfg from linker symbol instead of literal value.
-    const uint32_t app_ram_start_cfg = 0x200039c0;
-
-    DEBUG_printf("app_ram_start_cfg: 0x%lx\n", app_ram_start_cfg);
+    const uint32_t app_ram_start_cfg = (uint32_t)&_ram_start;
 
     if (err_code == NRF_SUCCESS) {
+        DEBUG_printf("app_ram_start_cfg: 0x%lx\n", app_ram_start_cfg);
+
         memset(&ble_conf, 0, sizeof(ble_conf));
 
         ble_conf.conn_cfg.conn_cfg_tag = BLE_MODBLUETOOTH_CONN_CONFIG_TAG;
