@@ -51,7 +51,6 @@
 // <q> NRF_BLE_LESC_ENABLED  - nrf_ble_lesc - Le Secure Connection
 
 #ifndef NRF_BLE_LESC_ENABLED
-// TODO: NRF_BLE_LESC_ENABLED: Problems calling nrf_ble_lesc_request_handler().
 #define NRF_BLE_LESC_ENABLED MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 #endif
 
@@ -178,7 +177,6 @@
 // <i> The Oberon backend
 //==========================================================
 #ifndef NRF_CRYPTO_BACKEND_OBERON_ENABLED
-// TODO: Test
 #define NRF_CRYPTO_BACKEND_OBERON_ENABLED 1
 #endif
 // <q> NRF_CRYPTO_BACKEND_OBERON_CHACHA_POLY_ENABLED  - Enable the CHACHA-POLY mode using Oberon.
@@ -317,8 +315,6 @@
 // <i> The CC310 hardware-accelerated cryptography backend (only available on nRF52840).
 //==========================================================
 #ifndef NRF_CRYPTO_BACKEND_CC310_ENABLED
-// TODO: Test
-//#define NRF_CRYPTO_BACKEND_CC310_ENABLED 1
 #define NRF_CRYPTO_BACKEND_CC310_ENABLED 0
 #endif
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CBC_ENABLED  - Enable the AES CBC mode using CC310.
@@ -359,20 +355,18 @@
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED  - Enable the AES CCM mode using CC310.
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED
-// TODO: Compile time error:
+// Compile time error:
 //   cc310_backend_aes_aead.c:277:14: error: 'CC_AESCCM_Init' accessing 32 bytes in a region of size 16 [-Werror=stringop-overflow=]
 //   cc310_backend_aes_aead.c:277:14: note: referencing argument 3 of type 'uint8_t[32]'
-//#define NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED 1
-#define NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED 0
+#define NRF_CRYPTO_BACKEND_CC310_AES_CCM_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED  - Enable the AES CCM* mode using CC310.
 
 
-// TODO: Compile time error - see above.
 #ifndef NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED
-//#define NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED 1
-#define NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED 0
+// Compile time error - see above.
+#define NRF_CRYPTO_BACKEND_CC310_AES_CCM_STAR_ENABLED 1
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_CHACHA_POLY_ENABLED  - Enable the CHACHA-POLY mode using CC310.
@@ -541,8 +535,6 @@
 // <i> Enable mbed TLS CTR-DRBG standardized by NIST (NIST SP 800-90A Rev. 1). The nRF HW RNG is used as an entropy source for seeding.
 
 #ifndef NRF_CRYPTO_BACKEND_NRF_HW_RNG_MBEDTLS_CTR_DRBG_ENABLED
-// TODO: Test
-//#define NRF_CRYPTO_BACKEND_NRF_HW_RNG_MBEDTLS_CTR_DRBG_ENABLED 1
 #define NRF_CRYPTO_BACKEND_NRF_HW_RNG_MBEDTLS_CTR_DRBG_ENABLED 0
 #endif
 
@@ -617,7 +609,7 @@
 #define NRFX_RNG_CONFIG_IRQ_PRIORITY 6
 #endif
 
-// TODO: NRFX_RNG_DEFAULT_CONFIG_IRQ_PRIORITY inserted - needed by nrfx_rng.h
+// NRFX_RNG_DEFAULT_CONFIG_IRQ_PRIORITY inserted - needed by nrfx_rng.h
 #ifndef NRFX_RNG_DEFAULT_CONFIG_IRQ_PRIORITY
 #define NRFX_RNG_DEFAULT_CONFIG_IRQ_PRIORITY 6
 #endif
@@ -1552,7 +1544,8 @@
 // <e> NRF_LOG_ENABLED - nrf_log - Logger
 //==========================================================
 #ifndef NRF_LOG_ENABLED
-//#define NRF_LOG_ENABLED 1
+// TODO: Debug
+//#define NRF_LOG_ENABLED 0
 #define NRF_LOG_ENABLED 1
 #endif
 
@@ -1715,7 +1708,9 @@
 // <e> NRF_SDH_BLE_LOG_ENABLED - Enable logging in SoftDevice handler (BLE) module.
 //==========================================================
 #ifndef NRF_SDH_BLE_LOG_ENABLED
-#define NRF_SDH_BLE_LOG_ENABLED 1
+// TODO: Debug
+//#define NRF_SDH_BLE_LOG_ENABLED 1
+#define NRF_SDH_BLE_LOG_ENABLED 0
 #endif
 // <o> NRF_SDH_BLE_LOG_LEVEL  - Default Severity level
 
@@ -1766,7 +1761,9 @@
 // <e> NRF_SDH_LOG_ENABLED - Enable logging in SoftDevice handler module.
 //==========================================================
 #ifndef NRF_SDH_LOG_ENABLED
-#define NRF_SDH_LOG_ENABLED 1
+// TODO: Debug
+//#define NRF_SDH_LOG_ENABLED 1
+#define NRF_SDH_LOG_ENABLED 0
 #endif
 // <o> NRF_SDH_LOG_LEVEL  - Default Severity level
 
@@ -1817,7 +1814,9 @@
 // <e> NRF_SDH_SOC_LOG_ENABLED - Enable logging in SoftDevice handler (SoC) module.
 //==========================================================
 #ifndef NRF_SDH_SOC_LOG_ENABLED
-#define NRF_SDH_SOC_LOG_ENABLED 1
+// TODO: Debug
+//#define NRF_SDH_SOC_LOG_ENABLED 1
+#define NRF_SDH_SOC_LOG_ENABLED 0
 #endif
 // <o> NRF_SDH_SOC_LOG_LEVEL  - Default Severity level
 
