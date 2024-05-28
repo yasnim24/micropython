@@ -22,6 +22,16 @@ else
 	$(error Incorrect softdevice set flag)
 endif
 
+ifeq ($(SOFTDEV_VERSION), 6.1.1)
+	CFLAGS += -DBLUETOOTH_SD_6_1_1=1
+else ifeq ($(SOFTDEV_VERSION), 7.2.0)
+	CFLAGS += -DBLUETOOTH_SD_7_2_0=1
+else ifeq ($(SOFTDEV_VERSION), 7.3.0)
+	CFLAGS += -DBLUETOOTH_SD_7_3_0=1
+else ifeq ($(SOFTDEV_VERSION), 8.0.0)
+	CFLAGS += -DBLUETOOTH_SD_8_0_0=1
+endif
+
 
 ifneq ($(MICROPY_PY_BLUETOOTH),)
 	CFLAGS += -DMICROPY_PY_BLUETOOTH=$(MICROPY_PY_BLUETOOTH)
