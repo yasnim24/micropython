@@ -43,7 +43,7 @@ endif
 
 ifeq ($(USE_NRF_SDK_COMPONENTS), 1)
 # include nRF5 SDK components
-LD_FILES += sdk/$(NRF_SDK_VERSION)/app.ld
+LD_FILES += sdk/common/app.ld
 endif
 
 LD_FILES += boards/memory.ld boards/common.ld
