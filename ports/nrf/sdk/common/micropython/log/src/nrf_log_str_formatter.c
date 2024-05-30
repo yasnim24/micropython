@@ -191,17 +191,12 @@ static inline int isprint(int c) {
     return c >= ' ' && c <= '~' ? 1 : 0;
 }
 
-void nrf_log_hexdump_entry_process(const uint8_t *p_data,
+// Log one line of a hexdump.
+// data_len: A maximum of HEXDUMP_BYTES_IN_LINE bytes will be logged.
+static void nrf_log_hexdump_one_line(const uint8_t *p_data,
                                    uint32_t data_len,
                                    nrf_log_str_formatter_entry_params_t * p_params)
 {
-    if (data_len > HEXDUMP_BYTES_IN_LINE)
-    {
-        return;
-    }
-
-    prefix_process(p_params);
-
     uint32_t i;
 
     for (i = 0; i < HEXDUMP_BYTES_IN_LINE; i++)
@@ -227,6 +222,32 @@ void nrf_log_hexdump_entry_process(const uint8_t *p_data,
         else
         {
             printf(" ");
+        }
+    }
+}
+
+void nrf_log_hexdump_entry_process(const uint8_t *p_data,
+                                   uint32_t data_len,
+                                   nrf_log_str_formatter_entry_params_t * p_params)
+{
+    prefix_process(p_params);
+
+    const uint8_t *p_data_current_line = p_data;
+    uint32_t remaining_data_len = data_len;
+
+    while(remaining_data_len > 0)
+    {
+        nrf_log_hexdump_one_line(p_data_current_line, remaining_data_len, p_params);
+
+        if (remaining_data_len > HEXDUMP_BYTES_IN_LINE)
+        {
+            p_data_current_line += HEXDUMP_BYTES_IN_LINE;
+            remaining_data_len -= HEXDUMP_BYTES_IN_LINE;
+        }
+        else
+        {
+            p_data_current_line += remaining_data_len;
+            remaining_data_len = 0;
         }
     }
 
