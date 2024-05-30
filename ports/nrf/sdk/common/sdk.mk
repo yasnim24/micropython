@@ -82,10 +82,26 @@ SRC_SDK += $(addprefix $(NRF_SDK_DIR)/components/libraries/queue/,\
     nrf_queue.c \
 	)
 
+# TODO: Experimental	
+# Needed for timer.	
+#SRC_SDK += $(addprefix $(NRF_SDK_DIR)/components/libraries/sortlist/,\
+#    nrf_sortlist.c.c \
+#	)
+
 # Needed for log.	
 SRC_SDK += $(addprefix $(NRF_SDK_DIR)/components/libraries/strerror/,\
     nrf_strerror.c \
 	)
+
+# TODO: Experimental	
+# Needed for PM_HANDLER_SEC_DELAY_MS.
+#SRC_SDK += $(addprefix $(NRF_SDK_DIR)/components/libraries/timer/,\
+#    app_timer2.c \
+#    app_timer.c \
+#    app_timer_freertos.c \
+#    app_timer_rtx.c \
+#    drv_rtc.c \
+#	)
 	
 SRC_SDK += $(addprefix $(NRF_SDK_DIR)/components/libraries/util/,\
     app_error.c \
@@ -132,6 +148,10 @@ INC += -I$(NRF_SDK_DIR)/components/libraries/crypto/backend/nrf_sw
 INC += -I$(NRF_SDK_DIR)/components/libraries/crypto/backend/oberon
 INC += -I$(NRF_SDK_DIR)/components/libraries/crypto/backend/optiga
 
+# TODO: Experimental	
+# Needed for timer.	
+#INC += -I$(NRF_SDK_DIR)/components/libraries/delay
+
 INC += -I$(NRF_SDK_DIR)/components/libraries/experimental_section_vars
 INC += -I$(NRF_SDK_DIR)/components/libraries/fstorage
 INC += -I$(NRF_SDK_DIR)/components/libraries/fds
@@ -142,9 +162,15 @@ INC += -I$(NRF_SDK_DIR)/components/libraries/queue
 # '$(NRF_SDK_DIR)/micropython/stack_info' will be used instead
 #INC += -I$(NRF_SDK_DIR)/components/libraries/stack_info
 
+# TODO: Experimental	
+# Needed for timer.	
+#INC += -I$(NRF_SDK_DIR)/components/libraries/sortlist
 # Needed for log.	
 INC += -I$(NRF_SDK_DIR)/components/libraries/strerror
-INC += -I$(NRF_SDK_DIR)/components/libraries/svc
+# TODO: Experimental	
+# Needed for PM_HANDLER_SEC_DELAY_MS.
+#INC += -I$(NRF_SDK_DIR)/components/libraries/timer
+#INC += -I$(NRF_SDK_DIR)/components/libraries/svc
 INC += -I$(NRF_SDK_DIR)/components/libraries/util
 INC += -I$(NRF_SDK_DIR)/components/softdevice/common
 
