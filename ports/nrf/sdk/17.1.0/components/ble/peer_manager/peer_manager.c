@@ -462,6 +462,9 @@ ret_code_t pm_conn_secure(uint16_t conn_handle, bool force_repairing)
 {
     VERIFY_MODULE_INITIALIZED();
 
+    NRF_LOG_DEBUG("pm_conn_secure(): conn_handle: %u, force_repairing: %u",
+            conn_handle, (uint16_t)force_repairing);
+
     ret_code_t err_code;
 
     err_code = sm_link_secure(conn_handle, force_repairing);

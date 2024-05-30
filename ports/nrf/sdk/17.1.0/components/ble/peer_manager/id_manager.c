@@ -172,6 +172,8 @@ void im_ble_evt_handler(ble_evt_t const * ble_evt)
         return;
     }
 
+    NRF_LOG_DEBUG("im_ble_evt_handler(BLE_GAP_EVT_CONNECTED)");
+
     gap_evt                 = ble_evt->evt.gap_evt;
     bonded_matching_peer_id = PM_PEER_ID_INVALID;
 

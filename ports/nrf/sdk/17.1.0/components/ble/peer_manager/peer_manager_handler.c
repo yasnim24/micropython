@@ -168,6 +168,9 @@ static const char * sec_err_string_get(pm_sec_error_code_t error)
 
 static void _conn_secure(uint16_t conn_handle, bool force)
 {
+    NRF_LOG_DEBUG("_conn_secure(): conn_handle: %u, force: %u",
+            conn_handle, (uint16_t)force);
+
     ret_code_t err_code;
 
     if (!force)
@@ -316,6 +319,9 @@ static void rank_highest(pm_peer_id_t peer_id)
 
 void pm_handler_flash_clean(pm_evt_t const * p_pm_evt)
 {
+    NRF_LOG_DEBUG("pm_handler_flash_clean(): p_pm_evt->evt_id: %d",
+            p_pm_evt->evt_id);
+
     ret_code_t  err_code;
     static bool flash_cleaning       = false;     // Indicates whether garbage collection is currently being run.
     static bool flash_write_after_gc = true;      // Indicates whether a successful write happened after the last garbage

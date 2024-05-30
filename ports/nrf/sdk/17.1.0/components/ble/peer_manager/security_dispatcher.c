@@ -304,6 +304,9 @@ static void sec_proc_start(uint16_t                conn_handle,
                            bool                    success,
                            pm_conn_sec_procedure_t procedure)
 {
+    NRF_LOG_DEBUG("sec_proc_start(): conn_handle: %u, success: %u",
+            conn_handle, (uint16_t)success);
+
     ble_conn_state_user_flag_set(conn_handle, m_flag_sec_proc, success);
     if (success)
     {
@@ -325,6 +328,8 @@ static void sec_proc_start(uint16_t                conn_handle,
  */
 static void sec_info_request_process(ble_gap_evt_t const * p_gap_evt)
 {
+    NRF_LOG_DEBUG("sec_info_request_process()");
+
     ret_code_t                 err_code;
     ble_gap_enc_info_t const * p_enc_info = NULL;
     pm_peer_data_flash_t       peer_data;
@@ -362,6 +367,10 @@ static void sec_info_request_process(ble_gap_evt_t const * p_gap_evt)
             }
         }
     }
+
+    NRF_LOG_DEBUG("sd_ble_gap_sec_info_reply: conn_handle: %u, p_existing_key->enc_info.auth: %u, .ltk_len: %u, .ltk:",
+            p_gap_evt->conn_handle, (uint16_t)p_enc_info->auth, (uint16_t)p_enc_info->ltk_len);
+    NRF_LOG_HEXDUMP_DEBUG(p_enc_info->ltk, (size_t)p_enc_info->ltk_len);
 
     err_code = sd_ble_gap_sec_info_reply(p_gap_evt->conn_handle, p_enc_info, NULL, NULL);
 
@@ -467,6 +476,8 @@ static void send_params_req(uint16_t conn_handle, ble_gap_sec_params_t const * p
  */
 static void sec_params_request_process(ble_gap_evt_t const * p_gap_evt)
 {
+    NRF_LOG_DEBUG("sec_params_request_process()");
+
 #ifdef BLE_GAP_ROLE_PERIPH
     if (ble_conn_state_role(p_gap_evt->conn_handle) == BLE_GAP_ROLE_PERIPH)
     {
@@ -510,6 +521,9 @@ static void pairing_success_evt_send(ble_gap_evt_t const * p_gap_evt, bool data_
  */
 static void auth_status_success_process(ble_gap_evt_t const * p_gap_evt)
 {
+    NRF_LOG_DEBUG("auth_status_success_process(): p_gap_evt->params.auth_status.auth_status: %u",
+            (uint16_t)p_gap_evt->params.auth_status.auth_status);
+
     ret_code_t     err_code;
     uint16_t       conn_handle = p_gap_evt->conn_handle;
     pm_peer_id_t   peer_id;
@@ -623,6 +637,9 @@ static void auth_status_failure_process(ble_gap_evt_t const * p_gap_evt)
  */
 static void auth_status_process(ble_gap_evt_t const * p_gap_evt)
 {
+    NRF_LOG_DEBUG("auth_status_process(): p_gap_evt->params.auth_status.auth_status: %u",
+            (uint16_t)p_gap_evt->params.auth_status.auth_status);
+
     switch (p_gap_evt->params.auth_status.auth_status)
     {
         case BLE_GAP_SEC_STATUS_SUCCESS:
@@ -645,6 +662,9 @@ static void auth_status_process(ble_gap_evt_t const * p_gap_evt)
  */
 static void conn_sec_update_process(ble_gap_evt_t const * p_gap_evt)
 {
+    NRF_LOG_DEBUG("conn_sec_update_process(): conn_handle: %u",
+            p_gap_evt->conn_handle);
+
     if (!pairing(p_gap_evt->conn_handle))
     {
         // This is an encryption procedure (not pairing), so this event marks the end of the procedure.
@@ -736,6 +756,10 @@ static ret_code_t sec_keyset_fill(uint16_t                 conn_handle,
                                   ble_gap_lesc_p256_pk_t * p_public_key,
                                   ble_gap_sec_keyset_t   * p_sec_keyset)
 {
+    NRF_LOG_DEBUG("sec_keyset_fill(): conn_handle: %u, role: %u",
+            conn_handle,
+            (uint16_t)role);
+
     ret_code_t     err_code;
     pm_peer_data_t peer_data;
 
@@ -792,6 +816,9 @@ ret_code_t smd_params_reply(uint16_t                 conn_handle,
                             ble_gap_sec_params_t   * p_sec_params,
                             ble_gap_lesc_p256_pk_t * p_public_key)
 {
+    NRF_LOG_DEBUG("smd_params_reply(): conn_handle: %u",
+            conn_handle);
+
     NRF_PM_DEBUG_CHECK(m_module_initialized);
 
     uint8_t              role       = ble_conn_state_role(conn_handle);
@@ -879,6 +906,21 @@ ret_code_t smd_params_reply(uint16_t                 conn_handle,
 static ret_code_t link_secure_authenticate(uint16_t               conn_handle,
                                            ble_gap_sec_params_t * p_sec_params)
 {
+    NRF_LOG_DEBUG("link_secure_authenticate():  conn_handle: %u, " \
+            "... kdist_own: enc=%u, id=%u, sign=%u, link=%u",
+            conn_handle,
+            (uint16_t)p_sec_params->kdist_own.enc,
+            (uint16_t)p_sec_params->kdist_own.id,
+            (uint16_t)p_sec_params->kdist_own.sign,
+            (uint16_t)p_sec_params->kdist_own.link);
+
+    NRF_LOG_DEBUG(" ... " \
+            "kdist_peer: enc=%u, id=%u, sign=%u, link=%u",
+            (uint16_t)p_sec_params->kdist_peer.enc,
+            (uint16_t)p_sec_params->kdist_peer.id,
+            (uint16_t)p_sec_params->kdist_peer.sign,
+            (uint16_t)p_sec_params->kdist_peer.link);
+
     ret_code_t err_code = sd_ble_gap_authenticate(conn_handle, p_sec_params);
 
     if (err_code == NRF_ERROR_NO_MEM)
@@ -897,6 +939,9 @@ static ret_code_t link_secure_authenticate(uint16_t               conn_handle,
 static ret_code_t link_secure_central_encryption(uint16_t     conn_handle,
                                                  pm_peer_id_t peer_id)
 {
+    NRF_LOG_DEBUG("link_secure_central_encryption(): conn_handle: %u, peer_id: %u",
+            conn_handle, (uint16_t)peer_id);
+
     pm_peer_data_flash_t      peer_data;
     ret_code_t                err_code;
     ble_gap_enc_key_t const * p_existing_key = NULL;
@@ -941,6 +986,14 @@ static ret_code_t link_secure_central_encryption(uint16_t     conn_handle,
     }
     else
     {
+        NRF_LOG_DEBUG("sd_ble_gap_encrypt: conn_handle: %u, p_existing_key->enc_info.auth: %u, .ltk_len: %u, .ltk:",
+                conn_handle, (uint16_t)p_existing_key->enc_info.auth, (uint16_t)p_existing_key->enc_info.ltk_len);
+        NRF_LOG_HEXDUMP_DEBUG(p_existing_key->enc_info.ltk, (size_t)p_existing_key->enc_info.ltk_len);
+
+        NRF_LOG_DEBUG("p_existing_key->master_id.ediv: %u, .rand:",
+                p_existing_key->master_id.ediv);
+        NRF_LOG_HEXDUMP_DEBUG(p_existing_key->master_id.rand, sizeof(p_existing_key->master_id.rand));
+
         // Encrypt with existing LTK.
         err_code = sd_ble_gap_encrypt(conn_handle,
                                     &(p_existing_key->master_id),
@@ -959,6 +1012,9 @@ static ret_code_t link_secure_central(uint16_t               conn_handle,
                                       ble_gap_sec_params_t * p_sec_params,
                                       bool                   force_repairing)
 {
+    NRF_LOG_DEBUG("link_secure_central(): conn_handle: %u, force_repairing: %u",
+            conn_handle, (uint16_t)force_repairing);
+
     ret_code_t   err_code;
     pm_peer_id_t peer_id;
 
@@ -971,6 +1027,9 @@ static ret_code_t link_secure_central(uint16_t               conn_handle,
     ble_conn_state_user_flag_set(conn_handle, m_flag_allow_repairing, force_repairing);
 
     peer_id = im_peer_id_get_by_conn_handle(conn_handle);
+
+    NRF_LOG_DEBUG("im_peer_id_get_by_conn_handle: conn_handle: %u, result peer_id: %u",
+            conn_handle, peer_id);
 
     if ((peer_id != PM_PEER_ID_INVALID) && !force_repairing)
     {
@@ -998,6 +1057,8 @@ static ret_code_t link_secure_central(uint16_t               conn_handle,
  */
 static void sec_request_process(ble_gap_evt_t const * p_gap_evt)
 {
+    NRF_LOG_DEBUG("sec_request_process()");
+
     if (sec_procedure(p_gap_evt->conn_handle))
     {
         // Ignore request as per spec.
@@ -1022,6 +1083,9 @@ static void sec_request_process(ble_gap_evt_t const * p_gap_evt)
  */
 static ret_code_t link_secure_peripheral(uint16_t conn_handle, ble_gap_sec_params_t * p_sec_params)
 {
+    NRF_LOG_DEBUG("link_secure_peripheral(): conn_handle: %u",
+            conn_handle);
+
     ret_code_t err_code = NRF_SUCCESS;
 
     if (p_sec_params != NULL)
@@ -1039,6 +1103,9 @@ ret_code_t smd_link_secure(uint16_t conn_handle,
                            bool     force_repairing)
 {
     NRF_PM_DEBUG_CHECK(m_module_initialized);
+
+    NRF_LOG_DEBUG("smd_link_secure(): conn_handle: %u, force_repairing: %u",
+            conn_handle, (uint16_t)force_repairing);
 
     uint8_t role = ble_conn_state_role(conn_handle);
 
@@ -1062,6 +1129,9 @@ ret_code_t smd_link_secure(uint16_t conn_handle,
 
 void smd_ble_evt_handler(ble_evt_t const * p_ble_evt)
 {
+    NRF_LOG_DEBUG("smd_ble_evt_handler(): p_ble_evt->header.evt_id: %u",
+            p_ble_evt->header.evt_id);
+
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_DISCONNECTED:

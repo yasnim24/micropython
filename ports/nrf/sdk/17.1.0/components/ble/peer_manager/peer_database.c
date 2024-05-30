@@ -339,6 +339,16 @@ static void write_buf_length_words_set(pm_peer_data_const_t * p_peer_data)
  */
 ret_code_t write_buf_store(pdb_buffer_record_t * p_write_buffer_record)
 {
+    NRF_LOG_DEBUG("write_buf_store(): peer_id: %u, data_id: %d, store_token: %lu, n_bufs: %u, buffer_block_id: %u",
+            p_write_buffer_record->peer_id,
+            p_write_buffer_record->data_id,
+            p_write_buffer_record->store_token,
+            (uint16_t)p_write_buffer_record->n_bufs,
+            (uint16_t)p_write_buffer_record->buffer_block_id);
+    NRF_LOG_DEBUG("..., store_flash_full: %u, store_busy: %u",
+            (uint16_t)p_write_buffer_record->store_flash_full,
+            (uint16_t)p_write_buffer_record->store_busy);
+
     ret_code_t            err_code = NRF_SUCCESS;
     pm_peer_data_const_t  peer_data = {.data_id = p_write_buffer_record->data_id};
     uint8_t             * p_buffer_memory;
@@ -613,6 +623,11 @@ ret_code_t pdb_write_buf_get(pm_peer_id_t      peer_id,
                              uint32_t          n_bufs,
                              pm_peer_data_t  * p_peer_data)
 {
+    NRF_LOG_DEBUG("pdb_write_buf_get(): peer_id: %u, data_id: %d, n_bufs: %lu",
+            peer_id,
+            data_id,
+            n_bufs);
+
     NRF_PM_DEBUG_CHECK(m_module_initialized);
 
     VERIFY_PARAM_NOT_NULL(p_peer_data);
@@ -631,6 +646,8 @@ ret_code_t pdb_write_buf_get(pm_peer_id_t      peer_id,
 
     if (p_write_buffer_record == NULL)
     {
+        NRF_LOG_DEBUG("write_buffer_record_acquire");
+
         // No buffer exists.
         write_buffer_record_acquire(&p_write_buffer_record, peer_id, data_id);
         if (p_write_buffer_record == NULL)
@@ -650,6 +667,8 @@ ret_code_t pdb_write_buf_get(pm_peer_id_t      peer_id,
 
         if (p_write_buffer_record->buffer_block_id == PM_BUFFER_INVALID_ID)
         {
+            NRF_LOG_DEBUG("write_buffer_record_invalidate");
+
             write_buffer_record_invalidate(p_write_buffer_record);
             return NRF_ERROR_BUSY;
         }
@@ -658,6 +677,8 @@ ret_code_t pdb_write_buf_get(pm_peer_id_t      peer_id,
     }
 
     p_write_buffer_record->n_bufs = n_bufs;
+
+    NRF_LOG_DEBUG("pm_buffer_ptr_get");
 
     p_buffer_memory = pm_buffer_ptr_get(&m_write_buffer, p_write_buffer_record->buffer_block_id);
 
@@ -668,6 +689,8 @@ ret_code_t pdb_write_buf_get(pm_peer_id_t      peer_id,
                       p_write_buffer_record->buffer_block_id);
         return NRF_ERROR_INTERNAL;
     }
+
+    NRF_LOG_DEBUG("peer_data_point_to_buffer");
 
     peer_data_point_to_buffer(p_peer_data, data_id, p_buffer_memory, n_bufs);
     if (new_record && (data_id == PM_PEER_DATA_ID_GATT_LOCAL))
@@ -704,6 +727,9 @@ ret_code_t pdb_write_buf_store(pm_peer_id_t      peer_id,
     NRF_PM_DEBUG_CHECK(m_module_initialized);
 
     VERIFY_DATA_ID_WRITE_BUF(data_id);
+
+    NRF_LOG_DEBUG("pdb_write_buf_store(): peer_id: %u, data_id: %d, new_peer_id: %u",
+            peer_id, data_id, new_peer_id);
 
     if (!pds_peer_id_is_allocated(new_peer_id))
     {

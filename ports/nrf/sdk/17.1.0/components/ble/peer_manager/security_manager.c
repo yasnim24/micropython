@@ -293,6 +293,9 @@ static ret_code_t link_secure(uint16_t conn_handle,
     ret_code_t             return_err_code;
     ble_gap_sec_params_t * p_sec_params;
 
+    NRF_LOG_DEBUG("link_secure(): conn_handle: %u, null_params:%u, force_repairing: %u, send_events: %u",
+            conn_handle, (uint16_t)null_params, (uint16_t)force_repairing, (uint16_t)send_events);
+
     if (null_params)
     {
         p_sec_params = NULL;
@@ -354,6 +357,9 @@ static ret_code_t link_secure(uint16_t conn_handle,
  */
 static void smd_params_reply_perform(uint16_t conn_handle, ble_gap_sec_params_t const * p_peer_params)
 {
+    NRF_LOG_DEBUG("smd_params_reply_perform(): conn_handle: %u",
+            conn_handle);
+
     ret_code_t                 err_code;
     ble_gap_lesc_p256_pk_t   * p_public_key;
     sec_params_reply_context_t context = new_context_get();
@@ -652,11 +658,12 @@ static bool sec_params_verify(ble_gap_sec_params_t * p_sec_params)
         return false;
     }
 
-    // link bit must be 0.
-    if (p_sec_params->kdist_own.link || p_sec_params->kdist_peer.link)
-    {
-        return false;
-    }
+// TODO: Experimental.
+//    // link bit must be 0.
+//    if (p_sec_params->kdist_own.link || p_sec_params->kdist_peer.link)
+//    {
+//        return false;
+//    }
 
     // If bonding is not enabled, no keys can be distributed.
     if (!p_sec_params->bond && (   p_sec_params->kdist_own.enc

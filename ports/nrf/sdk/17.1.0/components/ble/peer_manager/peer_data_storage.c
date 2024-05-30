@@ -283,6 +283,13 @@ static void fds_evt_handler(fds_evt_t const * const p_fds_evt)
         .peer_id = file_id_to_peer_id(p_fds_evt->write.file_id)
     };
 
+    NRF_LOG_DEBUG(
+            "fds_evt_handler(): p_fds_evt->id: %d, ->result: %lu, " \
+            "->record_id: 0x%lx, ->file_id: %u, record_key: %u, peer_id: %u",
+            p_fds_evt->id, p_fds_evt->result,
+            p_fds_evt->write.record_id, p_fds_evt->write.file_id,
+            p_fds_evt->write.record_key, pds_evt.peer_id);
+
     switch (p_fds_evt->id)
     {
         case FDS_EVT_WRITE:
@@ -395,6 +402,10 @@ ret_code_t pds_peer_data_read(pm_peer_id_t                    peer_id,
                               pm_peer_data_t          * const p_data,
                               uint32_t          const * const p_buf_len)
 {
+    NRF_LOG_DEBUG("pds_peer_data_read(): peer_id: %u, data_id: %d",
+            peer_id,
+            data_id);
+
     ret_code_t         ret;
     fds_record_desc_t  rec_desc;
     fds_flash_record_t rec_flash;
@@ -414,6 +425,13 @@ ret_code_t pds_peer_data_read(pm_peer_id_t                    peer_id,
 
     // Shouldn't fail, unless the record was deleted in the meanwhile or the CRC check has failed.
     ret = fds_record_open(&rec_desc, &rec_flash);
+
+    NRF_LOG_DEBUG("fds_record_open: rec_desc.record_id: 0x%lx, .gc_run_count: %x, .record_is_open: %u, rec_flash.p_header: 0x%lx, .p_data: 0x%lx",
+            rec_desc.record_id,
+            rec_desc.gc_run_count,
+            (uint16_t)rec_desc.record_is_open,
+            (uint32_t)rec_flash.p_header,
+            (uint32_t)rec_flash.p_data);
 
     if (ret != NRF_SUCCESS)
     {
@@ -462,6 +480,8 @@ bool pds_peer_data_iterate(pm_peer_data_id_t            data_id,
                            pm_peer_id_t         * const p_peer_id,
                            pm_peer_data_flash_t * const p_data)
 {
+    NRF_LOG_DEBUG("pds_peer_data_iterate(): data_id: %d", data_id);
+
     ret_code_t         ret;
     uint16_t           rec_key;
     fds_record_desc_t  rec_desc;
@@ -475,10 +495,17 @@ bool pds_peer_data_iterate(pm_peer_data_id_t            data_id,
 
     rec_key = peer_data_id_to_record_key(data_id);
 
-    if (fds_record_find_by_key(rec_key, &rec_desc, &m_fds_ftok) != NRF_SUCCESS)
+    ret_code_t find_result = fds_record_find_by_key(rec_key, &rec_desc, &m_fds_ftok);
+
+    NRF_LOG_DEBUG("fds_record_find_by_key: rec_key: %u - result: %d", rec_key, find_result);
+
+    if (find_result != NRF_SUCCESS)
     {
         return false;
     }
+
+    NRF_LOG_DEBUG("fds_record_open: rec_desc.record_id: 0x%lx, .p_record: 0x%lx, .gc_run_count: %u, record_is_open: %u",
+            rec_desc.record_id, (uint32_t)rec_desc.p_record, rec_desc.gc_run_count, (uint16_t)rec_desc.record_is_open);
 
     ret = fds_record_open(&rec_desc, &rec_flash);
 
@@ -506,6 +533,11 @@ ret_code_t pds_peer_data_store(pm_peer_id_t                 peer_id,
                                pm_peer_data_const_t const * p_peer_data,
                                pm_store_token_t           * p_store_token)
 {
+    NRF_LOG_DEBUG("pds_peer_data_store(): peer_id: %u, p_peer_data->length_words: %u, ->data_id: %d",
+            peer_id,
+            p_peer_data->length_words,
+            p_peer_data->data_id);
+
     ret_code_t         ret;
     fds_record_t       rec;
     fds_record_desc_t  rec_desc;
@@ -527,11 +559,15 @@ ret_code_t pds_peer_data_store(pm_peer_id_t                 peer_id,
     if (ret == NRF_ERROR_NOT_FOUND)
     {
         ret = fds_record_write(&rec_desc, &rec);
+
+        NRF_LOG_DEBUG("fds_record_write() returned %d", ret);
     }
     else // NRF_SUCCESS
     {
         // Update existing record.
         ret = fds_record_update(&rec_desc, &rec);
+
+        NRF_LOG_DEBUG("fds_record_update() returned %d", ret);
     }
 
     switch (ret)
