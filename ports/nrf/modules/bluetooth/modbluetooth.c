@@ -517,6 +517,22 @@ static void get_ble_gap_sec_params(ble_gap_sec_params_t *p_sec_params) {
     p_sec_params->kdist_own.id = m_security_config.bonding;
     p_sec_params->kdist_peer.enc = m_security_config.bonding;
     p_sec_params->kdist_peer.id = m_security_config.bonding;
+
+// TODO: Clean up.
+// See SD140 v7.2.0 documentation of sd_ble_gap_authenticate():
+// ... Setting of sign or link fields in ble_gap_sec_kdist_t not supported.
+
+//    #if (BLUETOOTH_SD == 140 && defined(BLUETOOTH_SD_7_2_0))
+//    // See SD140 v7.2.0 documentation of sd_ble_gap_authenticate():
+//    //
+//    // "... Distribution of own Identity Information is only supported if
+//    // the Central Address Resolution characteristic is configured
+//    // to be included or the Softdevice is configured to support
+//    // peripheral roles only. See ble_gap_cfg_car_incl_cfg_t and
+//    // ble_gap_cfg_role_count_t. ..."
+//    p_sec_params->kdist_own.link = m_security_config.bonding;
+//    p_sec_params->kdist_peer.link = m_security_config.bonding;
+//    #endif
 }
 
 // TODO: Experimental
@@ -539,6 +555,21 @@ static uint32_t set_peer_manager_sec_params(void) {
             (uint16_t)sec_params.lesc,
             (uint16_t)sec_params.io_caps,
             err_code);
+
+    // TODO: Experimental
+//    if (err_code == NRF_SUCCESS) {
+//        pm_privacy_params_t  privacy_params;
+//        memset(&privacy_params, 0, sizeof(privacy_params));
+//
+//        privacy_params.privacy_mode         = BLE_GAP_PRIVACY_MODE_DEVICE_PRIVACY;
+//        privacy_params.private_addr_type    = BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE;
+//        // Default private_addr_cycle_s is 900 (15 minutes)
+//        //privacy_params.private_addr_cycle_s = 0;
+//
+//        err_code = pm_privacy_set(&privacy_params);
+//
+//        DEBUG_printf("pm_privacy_set - result: 0x%02lx\n", err_code);
+//    }
 
     return err_code;
 }
