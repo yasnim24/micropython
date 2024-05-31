@@ -737,7 +737,7 @@
 //==========================================================
 #ifndef APP_TIMER_ENABLED
 // TODO: Needed by PM_HANDLER_SEC_DELAY_MS.
-#define APP_TIMER_ENABLED 1
+//#define APP_TIMER_ENABLED 1
 #define APP_TIMER_ENABLED 0
 #endif
 // <o> APP_TIMER_CONFIG_RTC_FREQUENCY  - Configure RTC prescaler.

@@ -237,6 +237,8 @@ void nrf_log_hexdump_entry_process(const uint8_t *p_data,
 
     while(remaining_data_len > 0)
     {
+        printf("\n");
+
         nrf_log_hexdump_one_line(p_data_current_line, remaining_data_len, p_params);
 
         if (remaining_data_len > HEXDUMP_BYTES_IN_LINE)
