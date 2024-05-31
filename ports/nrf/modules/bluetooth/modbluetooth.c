@@ -2009,6 +2009,10 @@ int mp_bluetooth_gap_pair(uint16_t conn_handle) {
 
     uint32_t err_code = pm_conn_secure(conn_handle, force_re_pair);
 
+//    set_peer_manager_sec_params();
+//
+//    uint32_t err_code = pm_conn_secure(conn_handle, false);
+
     int errno_result = nrf_error_to_errno(err_code);
     DEBUG_printf("return %d\n", errno_result);
     return errno_result;
