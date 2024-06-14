@@ -63,6 +63,7 @@
 #include "nrf_sdh_soc.h"
 #include "peer_manager.h"
 #include "peer_manager_handler.h"
+#include "nrf_strerror.h" // nrf_strerror_get
 #else // #if USE_NRF_SDK_COMPONENTS
 #include "nrf_sdm.h"
 #endif // #if USE_NRF_SDK_COMPONENTS
@@ -101,7 +102,7 @@
 #include "modbluetooth.h"
 
 // TODO: Comment out DEBUG_MODBLUETOOTH when debug is done.
-#define DEBUG_MODBLUETOOTH (1)
+//#define DEBUG_MODBLUETOOTH (1)
 
 #ifndef DEBUG_MODBLUETOOTH
 #define DEBUG_MODBLUETOOTH (0)
@@ -199,7 +200,9 @@
 // Peripheral Latency:
 // Skip that number of connection events when there is no data to send.
 // Value taken from modbluetooth_btstack.c - mp_bluetooth_gap_peripheral_connect()
-#define BLE_SLAVE_LATENCY            4
+// TODO: Experimental.
+//#define BLE_SLAVE_LATENCY            4
+#define BLE_SLAVE_LATENCY            0
 #define BLE_CONN_SUP_TIMEOUT         MSEC_TO_UNITS(4000, UNIT_10_MS)
 
 #if (BLUETOOTH_SD == 110)
@@ -535,15 +538,18 @@ static void get_ble_gap_sec_params(ble_gap_sec_params_t *p_sec_params) {
 //    #endif
 }
 
-// TODO: Experimental
-// Call pm_sec_params_set() according to 'm_security_config'.
-static uint32_t set_peer_manager_sec_params(void) {
+// TODO: Experimental - delayed mbt_peer_manager_init().
 
-    ble_gap_sec_params_t sec_params;
-    get_ble_gap_sec_params(&sec_params);
-
-    uint32_t err_code = pm_sec_params_set(&sec_params);
-
+//// TODO: Experimental
+//// Call pm_sec_params_set() according to 'm_security_config'.
+//static uint32_t set_peer_manager_sec_params(void) {
+//
+//    ble_gap_sec_params_t sec_params;
+//    get_ble_gap_sec_params(&sec_params);
+//
+//    uint32_t err_code = pm_sec_params_set(&sec_params);
+//
+/*
     DEBUG_printf("pm_sec_params_set - " \
             "bond: %u, " \
             "mitm: %u, " \
@@ -555,24 +561,55 @@ static uint32_t set_peer_manager_sec_params(void) {
             (uint16_t)sec_params.lesc,
             (uint16_t)sec_params.io_caps,
             err_code);
+*/
+//
+//    // TODO: Experimental
+////    if (err_code == NRF_SUCCESS) {
+////        pm_privacy_params_t  privacy_params;
+////        memset(&privacy_params, 0, sizeof(privacy_params));
+////
+////        privacy_params.privacy_mode         = BLE_GAP_PRIVACY_MODE_DEVICE_PRIVACY;
+////        privacy_params.private_addr_type    = BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE;
+////        // Default private_addr_cycle_s is 900 (15 minutes)
+////        //privacy_params.private_addr_cycle_s = 0;
+////
+////        err_code = pm_privacy_set(&privacy_params);
+////
+////        DEBUG_printf("pm_privacy_set - result: 0x%02lx\n", err_code);
+////    }
+//
+//    return err_code;
+//}
 
-    // TODO: Experimental
-//    if (err_code == NRF_SUCCESS) {
-//        pm_privacy_params_t  privacy_params;
-//        memset(&privacy_params, 0, sizeof(privacy_params));
-//
-//        privacy_params.privacy_mode         = BLE_GAP_PRIVACY_MODE_DEVICE_PRIVACY;
-//        privacy_params.private_addr_type    = BLE_GAP_ADDR_TYPE_RANDOM_PRIVATE_RESOLVABLE;
-//        // Default private_addr_cycle_s is 900 (15 minutes)
-//        //privacy_params.private_addr_cycle_s = 0;
-//
-//        err_code = pm_privacy_set(&privacy_params);
-//
-//        DEBUG_printf("pm_privacy_set - result: 0x%02lx\n", err_code);
-//    }
+static uint32_t mbt_peer_manager_init(void);
+
+// Call pm_sec_params_set() according to 'm_security_config'.
+static uint32_t set_peer_manager_sec_params(void) {
+
+    uint32_t err_code = mbt_peer_manager_init();
+
+    if (err_code == NRF_SUCCESS) {
+        ble_gap_sec_params_t sec_params;
+        get_ble_gap_sec_params(&sec_params);
+
+        err_code = pm_sec_params_set(&sec_params);
+
+        DEBUG_printf("pm_sec_params_set - " \
+                "bond: %u, " \
+                "mitm: %u, " \
+                "lesc: %u, " \
+                "io_caps: %u " \
+                "- result: 0x%02lx\n",
+                (uint16_t)sec_params.bond,
+                (uint16_t)sec_params.mitm,
+                (uint16_t)sec_params.lesc,
+                (uint16_t)sec_params.io_caps,
+                err_code);
+    }
 
     return err_code;
 }
+
 
 // TODO: Clean up.
 //// Call pm_conn_sec_params_reply() according to 'm_security_config'.
@@ -608,11 +645,13 @@ static void peer_manager_event_handler(pm_evt_t const *p_evt)
     DEBUG_printf("peer_manager_event_handler - p_evt->evt_id: %d\n", p_evt->evt_id);
 
     pm_handler_on_pm_evt(p_evt);
-    pm_handler_flash_clean(p_evt);
+
+    // TODO: Experimental.
+    //pm_handler_flash_clean(p_evt);
 
     // TODO: Clean up.
-//    switch (p_evt->evt_id)
-//    {
+    switch (p_evt->evt_id)
+    {
 //        case PM_EVT_CONN_SEC_PARAMS_REQ: {
 //            uint16_t conn_handle = p_evt->conn_handle;
 //            const pm_conn_sec_params_req_evt_t *p_conn_sec_params_req =
@@ -622,10 +661,21 @@ static void peer_manager_event_handler(pm_evt_t const *p_evt)
 //            break;
 //        }
 //
-//        default: {
+
+// TODO: Experimental.
+//    case PM_EVT_CONN_CONFIG_REQ: {
+//            // Prevent encryption directly after connect.
+//            uint16_t conn_handle = p_evt->conn_handle;
+//            const pm_conn_config_req_evt_t *p_conn_config_req =
+//                    &(p_evt->params.conn_config_req);
+//            pm_conn_exclude(conn_handle, p_conn_config_req->p_context);
 //            break;
 //        }
-//    }
+
+        default: {
+            break;
+        }
+    }
 }
 
 
@@ -906,7 +956,9 @@ int mp_bluetooth_init(void) {
 
         ble_conf.conn_cfg.conn_cfg_tag = BLE_MODBLUETOOTH_CONN_CONFIG_TAG;
         ble_conf.conn_cfg.params.gap_conn_cfg.conn_count = BLE_MAX_CONN_COUNT;
-        ble_conf.conn_cfg.params.gap_conn_cfg.event_length = BLE_GAP_EVENT_LENGTH_DEFAULT;
+        // TODO: Experimental - increase values of sd_ble_gap_data_length_update().
+        //ble_conf.conn_cfg.params.gap_conn_cfg.event_length = BLE_GAP_EVENT_LENGTH_DEFAULT;
+        ble_conf.conn_cfg.params.gap_conn_cfg.event_length = 6;
         err_code = sd_ble_cfg_set(BLE_CONN_CFG_GAP, &ble_conf, app_ram_start_cfg);
 
         DEBUG_printf("sd_ble_cfg_set(BLE_CONN_CFG_GAP): %lu\n", err_code);
@@ -963,7 +1015,32 @@ int mp_bluetooth_init(void) {
 
         DEBUG_printf("sd_ble_cfg_set(BLE_CONN_CFG_GATT): %lu\n", err_code);
     }
+
     #endif // (BLUETOOTH_SD == 110)
+
+
+    // TODO: Experimental.
+    //
+    // The following error occurs when the CAR characteristics is excluded:
+    // <error> peer_manager_sm: Could not perform security procedure. smd_link_secure() returned NRF_ERROR_NOT_SUPPORTED. conn_handle: 0
+    //
+    // The error is returned by sd_ble_gap_authenticate():
+    // ... Distribution of own Identity Information is only supported if the Central Address Resolution
+    // characteristic is configured to be included ...
+//    #if (BLUETOOTH_SD == 140 && defined(BLUETOOTH_SD_7_2_0))
+//
+//    if (err_code == NRF_SUCCESS) {
+//        memset(&ble_conf, 0, sizeof(ble_conf));
+//
+//        /* Exclude CAR from GAP service and don't reserve the ATT Handles */
+//        ble_conf.gap_cfg.car_include_cfg.include_cfg = BLE_GAP_CHAR_INCL_CONFIG_EXCLUDE_WITHOUT_SPACE;
+//        err_code = sd_ble_cfg_set(BLE_GAP_CFG_CAR_INCL_CONFIG, &ble_conf, app_ram_start_cfg);
+//
+//        DEBUG_printf("sd_ble_cfg_set(BLE_GAP_CFG_CAR_INCL_CONFIG): %lu\n", err_code);
+//    }
+//
+//    #endif // (BLUETOOTH_SD == 140 && defined(BLUETOOTH_SD_7_2_0))
+
 
     #if (BLUETOOTH_SD == 110)
     if (err_code == NRF_SUCCESS) {
@@ -1003,27 +1080,28 @@ int mp_bluetooth_init(void) {
         DEBUG_printf("sd_ble_gap_ppcp_set(): %lu\n", err_code);
     }
 
-    #if USE_NRF_SDK_COMPONENTS
-    if (err_code == NRF_SUCCESS) {
-        // TODO: Clean up.
-//        if (!m_peer_manager_state.is_peer_manager_initialized) {
-//            // pm_init() shall be called only once because it doesn't
-//            // check if it is already initialized.
-//            //
-//            // All pairing and bonding procedures that are initiated by the peer
-//            // are rejected until pm_sec_params_set() is called.
-//            err_code = pm_init();
+// TODO: Experimental - delayed mbt_peer_manager_init().
+//    #if USE_NRF_SDK_COMPONENTS
+//    if (err_code == NRF_SUCCESS) {
+//        // TODO: Clean up.
+////        if (!m_peer_manager_state.is_peer_manager_initialized) {
+////            // pm_init() shall be called only once because it doesn't
+////            // check if it is already initialized.
+////            //
+////            // All pairing and bonding procedures that are initiated by the peer
+////            // are rejected until pm_sec_params_set() is called.
+////            err_code = pm_init();
+////
+////            if (err_code == NRF_SUCCESS) {
+////                m_peer_manager_state.is_peer_manager_initialized = 1;
+////            }
+////
+////            // TODO: Erase nRF Flash Data Storage pages in case that pm_init() returns an error.
+////        }
 //
-//            if (err_code == NRF_SUCCESS) {
-//                m_peer_manager_state.is_peer_manager_initialized = 1;
-//            }
-//
-//            // TODO: Erase nRF Flash Data Storage pages in case that pm_init() returns an error.
-//        }
-
-        err_code = mbt_peer_manager_init();
-    }
-    #endif // USE_NRF_SDK_COMPONENTS
+//        err_code = mbt_peer_manager_init();
+//    }
+//    #endif // USE_NRF_SDK_COMPONENTS
 
     int errno_result = nrf_error_to_errno(err_code);
     DEBUG_printf("return %d\n", errno_result);
@@ -1093,7 +1171,7 @@ void mp_bluetooth_get_current_address(uint8_t *addr_type, uint8_t *addr) {
 
 // Sets the addressing mode to use.
 void mp_bluetooth_set_address_mode(uint8_t addr_mode) {
-    DEBUG_printf("mp_bluetooth_set_address_mode: MP_EOPNOTSUPP\n");
+    DEBUG_printf("mp_bluetooth_set_address_mode - addr_mode: %u\n", addr_mode);
 
     // See description of sd_ble_gap_addr_set():
     // ...
@@ -1108,7 +1186,60 @@ void mp_bluetooth_set_address_mode(uint8_t addr_mode) {
     // The SoftDevice functions sd_ble_gap_addr_set and sd_ble_gap_privacy_set
     // must not be called when using the Peer Manager. Use the Peer Manager
     // equivalents instead.
+
+#if USE_NRF_SDK_COMPONENTS
+    // TODO: Experimental
+
+    uint32_t err_code = NRF_SUCCESS;
+
+    if (addr_mode == MP_BLUETOOTH_ADDRESS_MODE_PUBLIC) {
+        ble_gap_addr_t ble_gap_addr;
+        memset(&ble_gap_addr, 0, sizeof(ble_gap_addr));
+
+        ble_gap_addr.addr_type = BLE_GAP_ADDR_TYPE_PUBLIC;
+        ble_gap_addr.addr[5] = 0x5C;
+        ble_gap_addr.addr[4] = 0xF3;
+        ble_gap_addr.addr[3] = 0x70;
+        ble_gap_addr.addr[2] = 0x85;
+        ble_gap_addr.addr[1] = 0x6B;
+        ble_gap_addr.addr[0] = 0xA5;
+
+        err_code = pm_id_addr_set(&ble_gap_addr);
+
+        DEBUG_printf("pm_id_addr_set() returned %s\n", nrf_strerror_get(err_code));
+    }
+
+    if (err_code == NRF_SUCCESS) {
+        pm_privacy_params_t  privacy_params;
+        memset(&privacy_params, 0, sizeof(privacy_params));
+
+        // pm_privacy_set() will do the plausible check of addr_mode.
+        privacy_params.private_addr_type = addr_mode;
+
+        if (addr_mode == MP_BLUETOOTH_ADDRESS_MODE_RANDOM ||
+                addr_mode == MP_BLUETOOTH_ADDRESS_MODE_PUBLIC) {
+            privacy_params.privacy_mode = BLE_GAP_PRIVACY_MODE_OFF;
+        }
+        else {
+            privacy_params.privacy_mode = BLE_GAP_PRIVACY_MODE_DEVICE_PRIVACY;
+        }
+
+        // Default private_addr_cycle_s is 900 (15 minutes)
+        //privacy_params.private_addr_cycle_s = 0;
+
+        err_code = pm_privacy_set(&privacy_params);
+
+        DEBUG_printf("pm_privacy_set() returned %s\n", nrf_strerror_get(err_code));
+    }
+
+    if (err_code != NRF_SUCCESS) {
+        int errno_result = nrf_error_to_errno(err_code);
+        mp_raise_OSError(errno_result);
+    }
+
+#else // USE_NRF_SDK_COMPONENTS
     mp_raise_OSError(MP_EOPNOTSUPP);
+#endif // USE_NRF_SDK_COMPONENTS
 }
 
 
@@ -2002,12 +2133,15 @@ int mp_bluetooth_gap_pair(uint16_t conn_handle) {
 //        err_code = pm_conn_secure(conn_handle, false);
 //    }
 
-    // Always do the bonding process in case that bonding is set.
-    // I.e. if there is a stored bond the bonding process will be
-    // circumvented only if bonding is not set.
-    bool force_re_pair = m_security_config.bonding ? true : false;
+    // TODO: Experimental
+//    // Always do the bonding process in case that bonding is set.
+//    // I.e. if there is a stored bond the bonding process will be
+//    // circumvented only if bonding is not set.
+//    bool force_re_pair = m_security_config.bonding ? true : false;
+//
+//    uint32_t err_code = pm_conn_secure(conn_handle, force_re_pair);
 
-    uint32_t err_code = pm_conn_secure(conn_handle, force_re_pair);
+    uint32_t err_code = pm_conn_secure(conn_handle, false);
 
 //    set_peer_manager_sec_params();
 //
@@ -2565,17 +2699,19 @@ void passkey_to_value(const uint8_t passkey[6], int *p_result_value) {
 #define MP_ADV_TYPE_SCAN_RSP (4)
 
 // Convert ble_gap_adv_report_type_t to MP_ADV_TYPE_* value
-uint8_t ble_gap_adv_report_type_to_mp_adv_type(ble_gap_adv_report_type_t ble_gap_adv_report_type) {
+static uint8_t ble_gap_adv_report_type_to_mp_adv_type(ble_gap_adv_report_type_t ble_gap_adv_report_type) {
     uint8_t result;
 
-    if (ble_gap_adv_report_type.connectable) {
+    // connectable and scannable is set together with scan_response.
+    // So check scan_response first.
+    if (ble_gap_adv_report_type.scan_response) {
+        result = MP_ADV_TYPE_SCAN_RSP;
+    } else if (ble_gap_adv_report_type.directed) {
+        result = MP_ADV_TYPE_DIRECT_IND;
+    } else if (ble_gap_adv_report_type.connectable) {
         result = MP_ADV_TYPE_CONN_IND;
     } else if (ble_gap_adv_report_type.scannable) {
         result = MP_ADV_TYPE_SCAN_IND;
-    } else if (ble_gap_adv_report_type.directed) {
-        result = MP_ADV_TYPE_DIRECT_IND;
-    } else if (ble_gap_adv_report_type.scan_response) {
-        result = MP_ADV_TYPE_SCAN_RSP;
     } else {
         result = MP_ADV_TYPE_NONCONN_IND;
     }
@@ -2693,18 +2829,25 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
 
         case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST: {
             // Client requests a MTU.
-            DEBUG_printf("BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST\n");
-
             uint16_t conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
 
             uint16_t client_mtu = p_ble_evt->evt.gatts_evt.params.exchange_mtu_request.client_rx_mtu;
             client_mtu = MAX(client_mtu, BLE_GATT_ATT_MTU_DEFAULT);
             uint16_t effective_att_mtu = MIN(client_mtu, m_prefered_mtu);
 
+            DEBUG_printf("BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST - conn_handle: %u, client_mtu: %u, effective_att_mtu: %u\n",
+                    conn_handle, client_mtu, effective_att_mtu);
+
             uint32_t err_code = sd_ble_gatts_exchange_mtu_reply(conn_handle, effective_att_mtu);
+
             if (err_code == NRF_SUCCESS) {
                 mp_bluetooth_gatts_on_mtu_exchanged(conn_handle, effective_att_mtu);
             }
+            else {
+                DEBUG_printf("sd_ble_gatts_exchange_mtu_reply() returned %s.\n",
+                              nrf_strerror_get(err_code));
+            }
+
             break;
         }
 
@@ -2911,25 +3054,41 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
         case BLE_GAP_EVT_ADV_REPORT: {
             const ble_gap_evt_adv_report_t *p_adv_report = &(p_ble_evt->evt.gap_evt.params.adv_report);
 
-            DEBUG_printf("BLE_GAP_EVT_ADV_REPORT - connectable: %u, scannable: %u, directed: %u, scan_response: %u, status: 0x%02x\n",
-                (uint16_t)p_adv_report->type.connectable,
-                (uint16_t)p_adv_report->type.scannable,
-                (uint16_t)p_adv_report->type.directed,
-                (uint16_t)p_adv_report->type.scan_response,
-                (uint16_t)p_adv_report->type.status);
+            // ATTENTION
+            // ---------
+            // With debug output a scan response that normally follows the
+            // "normal advertising packet" will be lost because the window
+            // for sending the scan request will be missed.
+            //
+            // See "https://devzone.nordicsemi.com/f/nordic-q-a/92376/ble_gap_evt_adv_report-generation-for-active-scan":
+            //
+            // "... If a advertiser is doing scannable advertising, it will transmit the normal
+            // advertising packet first, and after it have done that, it will for a short period
+            // of time stay in RX mode, listening for a scan response request from a potential
+            // scanner. The scanner needs to send the request in this window. ..."
 
-            uint8_t mp_addr_type;
-            uint8_t mp_addr[6];
-            ble_gap_addr_to_mp_addr(&(p_adv_report->peer_addr), &mp_addr_type, mp_addr);
+            // TODO: Experimental - Debug.
+//            if (p_adv_report->type.scan_response) {
+                DEBUG_printf("BLE_GAP_EVT_ADV_REPORT - connectable: %u, scannable: %u, directed: %u, scan_response: %u, status: 0x%02x\n",
+                    (uint16_t)p_adv_report->type.connectable,
+                    (uint16_t)p_adv_report->type.scannable,
+                    (uint16_t)p_adv_report->type.directed,
+                    (uint16_t)p_adv_report->type.scan_response,
+                    (uint16_t)p_adv_report->type.status);
 
-            uint8_t mp_adv_type = ble_gap_adv_report_type_to_mp_adv_type(p_adv_report->type);
-            int8_t rssi = p_adv_report->rssi;
+                uint8_t mp_addr_type;
+                uint8_t mp_addr[6];
+                ble_gap_addr_to_mp_addr(&(p_adv_report->peer_addr), &mp_addr_type, mp_addr);
 
-            const uint8_t *data = p_adv_report->data.p_data;
-            uint16_t data_len = p_adv_report->data.len;
+                uint8_t mp_adv_type = ble_gap_adv_report_type_to_mp_adv_type(p_adv_report->type);
+                int8_t rssi = p_adv_report->rssi;
 
-            // Notify modbluetooth of a scan result.
-            mp_bluetooth_gap_on_scan_result(mp_addr_type, mp_addr, mp_adv_type, rssi, data, data_len);
+                const uint8_t *data = p_adv_report->data.p_data;
+                uint16_t data_len = p_adv_report->data.len;
+
+                // Notify modbluetooth of a scan result.
+                mp_bluetooth_gap_on_scan_result(mp_addr_type, mp_addr, mp_adv_type, rssi, data, data_len);
+//            }
 
             #if DEBUG_MODBLUETOOTH
             // Continue scan.
@@ -3275,19 +3434,56 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
         }
 
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE_REQUEST: {
-            DEBUG_printf("BLE_GAP_EVT_DATA_LENGTH_UPDATE_REQUEST - max_tx_octets: %u, max_rx_octets: %u, max_tx_time_us: %u, max_rx_time_us: %u\n",
+            uint16_t conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+
+            DEBUG_printf("BLE_GAP_EVT_DATA_LENGTH_UPDATE_REQUEST - conn_handle: %u, max_tx_octets: %u, max_rx_octets: %u, max_tx_time_us: %u, max_rx_time_us: %u\n",
+                conn_handle,
                 p_ble_evt->evt.gap_evt.params.data_length_update_request.peer_params.max_tx_octets,
                 p_ble_evt->evt.gap_evt.params.data_length_update_request.peer_params.max_rx_octets,
                 p_ble_evt->evt.gap_evt.params.data_length_update_request.peer_params.max_tx_time_us,
                 p_ble_evt->evt.gap_evt.params.data_length_update_request.peer_params.max_rx_time_us);
 
-            #if DEBUG_MODBLUETOOTH
-            uint32_t err_code = sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, NULL, NULL);
+// TODO: Experimental
+//            #if DEBUG_MODBLUETOOTH
+//            uint32_t err_code = sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, NULL, NULL);
+//
+//            DEBUG_printf("sd_ble_gap_data_length_update() result: 0x%04lx\n", err_code);
+//            #else // DEBUG_MODBLUETOOTH
+//            sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, NULL, NULL);
+//            #endif // DEBUG_MODBLUETOOTH
 
-            DEBUG_printf("sd_ble_gap_data_length_update() result: 0x%04lx\n", err_code);
-            #else // DEBUG_MODBLUETOOTH
-            sd_ble_gap_data_length_update(p_ble_evt->evt.gap_evt.conn_handle, NULL, NULL);
-            #endif // DEBUG_MODBLUETOOTH
+            ble_gap_data_length_params_t const dlp =
+            {
+                // 251 is the maximum allowed value.
+                .max_rx_octets  = 80,
+                .max_tx_octets  = 251,
+                .max_rx_time_us = BLE_GAP_DATA_LENGTH_AUTO,
+                .max_tx_time_us = BLE_GAP_DATA_LENGTH_AUTO,
+            };
+
+            ble_gap_data_length_limitation_t dll = {0};
+
+            ret_code_t err_code = sd_ble_gap_data_length_update(conn_handle, &dlp, &dll);
+
+            if (err_code != NRF_SUCCESS)
+            {
+                DEBUG_printf("sd_ble_gap_data_length_update() (request) returned %s.\n",
+                              nrf_strerror_get(err_code));
+
+                if (   (dll.tx_payload_limited_octets != 0)
+                    || (dll.rx_payload_limited_octets != 0))
+                {
+                    DEBUG_printf("The requested TX/RX packet length is too long by %u/%u octets.\n",
+                                  dll.tx_payload_limited_octets, dll.rx_payload_limited_octets);
+                }
+
+                if (dll.tx_rx_time_limited_us != 0)
+                {
+                    DEBUG_printf("The requested combination of TX and RX packet lengths "
+                                  "is too long by %u microseconds.\n",
+                                  dll.tx_rx_time_limited_us);
+                }
+            }
 
             break;
         }

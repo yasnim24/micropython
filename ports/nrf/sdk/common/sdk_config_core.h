@@ -98,7 +98,9 @@
 // <i> Set this to false to save code space if not using the peer rank API.
 
 #ifndef PM_PEER_RANKS_ENABLED
-#define PM_PEER_RANKS_ENABLED 1
+// TODO: Experimental.
+//#define PM_PEER_RANKS_ENABLED 1
+#define PM_PEER_RANKS_ENABLED 0
 #endif
 
 // <q> PM_LESC_ENABLED  - Enable/disable LESC support in Peer Manager.
@@ -1294,7 +1296,11 @@
 
 // <o> NRF_SDH_BLE_GATT_MAX_MTU_SIZE - Static maximum MTU size.
 #ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
-#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 23
+// TODO: Experimental
+//#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 23
+// 251 is the maximum allowed value.
+//#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 64
+#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 251
 #endif
 
 // <o> NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE - Attribute Table size in bytes. The size must be a multiple of 4.
@@ -1340,7 +1346,9 @@
 
 // <o> PM_BLE_OBSERVER_PRIO - Priority with which BLE events are dispatched to the Peer Manager module.
 #ifndef PM_BLE_OBSERVER_PRIO
-#define PM_BLE_OBSERVER_PRIO 1
+// TODO: Experimental
+//#define PM_BLE_OBSERVER_PRIO 1
+#define PM_BLE_OBSERVER_PRIO 2
 #endif
 
 // </h>
@@ -1683,8 +1691,8 @@
 
 #ifndef NRF_LOG_DEFAULT_LEVEL
 // TODO: Debug
-//#define NRF_LOG_DEFAULT_LEVEL 3
-#define NRF_LOG_DEFAULT_LEVEL 4
+#define NRF_LOG_DEFAULT_LEVEL 3
+//#define NRF_LOG_DEFAULT_LEVEL 4
 #endif
 
 
@@ -1790,8 +1798,8 @@
 
 #ifndef PM_LOG_LEVEL
 // TODO: Debug
-//#define PM_LOG_LEVEL 3
-#define PM_LOG_LEVEL 4
+#define PM_LOG_LEVEL 3
+//#define PM_LOG_LEVEL 4
 #endif
 
 // <o> PM_LOG_INFO_COLOR  - ANSI escape code prefix.

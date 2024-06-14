@@ -65,7 +65,10 @@ nrf_nvic_state_t nrf_nvic_state = {{0}, 0};
 
 #if USE_NRF_SDK_COMPONENTS
 // Prevent parentheses around values because otherwise the macros will fail.
-#define BLE_OBSERVER_PRIO 3
+// TODO: Experimental
+//#define BLE_OBSERVER_PRIO 3
+// See also NRF_BLE_GATT_BLE_OBSERVER_PRIO in nRF5 SDK 17.1.0 examples ble_app_multirole_lesc.
+#define BLE_OBSERVER_PRIO 1
 #define SOC_OBSERVER_PRIO 1
 #endif
 
