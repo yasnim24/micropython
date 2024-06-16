@@ -72,6 +72,11 @@
 #define MICROPY_PY_BLUETOOTH_ENABLE_HCI_CMD (0)
 #endif
 
+// A port can optionally enable extended functionality.
+#ifndef MICROPY_PY_BLUETOOTH_EXTENDED
+#define MICROPY_PY_BLUETOOTH_EXTENDED (0)
+#endif
+
 // This is used to protect the ringbuffer.
 // A port may no-op this if MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS is enabled.
 #ifndef MICROPY_PY_BLUETOOTH_ENTER
@@ -161,6 +166,7 @@
 #define MP_BLUETOOTH_IRQ_GET_SECRET                     (29)
 #define MP_BLUETOOTH_IRQ_SET_SECRET                     (30)
 #define MP_BLUETOOTH_IRQ_PASSKEY_ACTION                 (31)
+#define MP_BLUETOOTH_IRQ_BONDS_DELETED               (64)
 
 #define MP_BLUETOOTH_ADDRESS_MODE_PUBLIC (0)
 #define MP_BLUETOOTH_ADDRESS_MODE_RANDOM (1)
@@ -189,6 +195,14 @@
 // These are the ops for mp_bluetooth_gatts_notify_indicate.
 #define MP_BLUETOOTH_GATTS_OP_NOTIFY                    (1)
 #define MP_BLUETOOTH_GATTS_OP_INDICATE                  (2)
+
+// ---- Privacy modes for mp_bluetooth_set_privacy()
+// Privacy off (default).
+#define MP_BLUETOOTHEXT_PRIVACY_OFF                     (0)
+// Use Resolvable Private Addresses - matches MP_BLUETOOTH_ADDRESS_MODE_RPA.
+#define MP_BLUETOOTHEXT_PRIVACY_RPA                     (2)
+// Use Non-Resolvable Private Addresses - matches MP_BLUETOOTH_ADDRESS_MODE_NRPA.
+#define MP_BLUETOOTHEXT_PRIVACY_NRPA                    (3)
 
 /*
 These aren't included in the module for space reasons, but can be used
@@ -226,6 +240,7 @@ _IRQ_ENCRYPTION_UPDATE = const(28)
 _IRQ_GET_SECRET = const(29)
 _IRQ_SET_SECRET = const(30)
 _IRQ_PASSKEY_ACTION = const(31)
+_IRQ_BONDS_DELETED = const(64)
 
 _FLAG_BROADCAST = const(0x0001)
 _FLAG_READ = const(0x0002)
@@ -303,6 +318,11 @@ bool mp_bluetooth_is_active(void);
 // Gets the current address of this device in big-endian format.
 void mp_bluetooth_get_current_address(uint8_t *addr_type, uint8_t *addr);
 
+#if MICROPY_PY_BLUETOOTH_EXTENDED
+// Sets the current address of this device in big-endian format.
+int mp_bluetooth_set_current_address(const uint8_t *addr);
+#endif // MICROPY_PY_BLUETOOTH_EXTENDED
+
 // Sets the addressing mode to use.
 void mp_bluetooth_set_address_mode(uint8_t addr_mode);
 
@@ -315,6 +335,17 @@ void mp_bluetooth_set_mitm_protection(bool enabled);
 void mp_bluetooth_set_le_secure(bool enabled);
 // I/O capabilities for authentication (see MP_BLUETOOTH_IO_CAPABILITY_*).
 void mp_bluetooth_set_io_capability(uint8_t capability);
+
+#if MICROPY_PY_BLUETOOTH_EXTENDED
+// Force a pairing procedure even if there is an existing bond.
+int mp_bluetooth_set_force_pairing(bool enabled);
+// Set privacy mode (see MP_BLUETOOTH_PRIVACY_*).
+int mp_bluetooth_set_privacy(uint8_t privacy_mode);
+// Delete all stored bonding information.
+// This will result in the event MP_BLUETOOTH_IRQ_BONDS_DELETED.
+int mp_bluetooth_delete_bonds(void);
+#endif // MICROPY_PY_BLUETOOTH_EXTENDED
+
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 // Get or set the GAP device name that will be used by service 0x1800, characteristic 0x2a00.
@@ -431,6 +462,13 @@ bool mp_bluetooth_gap_on_set_secret(uint8_t type, const uint8_t *key, size_t key
 
 // Call this when a passkey verification needs to be processed.
 void mp_bluetooth_gap_on_passkey_action(uint16_t conn_handle, uint8_t action, mp_int_t passkey);
+
+#if MICROPY_PY_BLUETOOTH_EXTENDED
+// Notify modbluetooth about the result of mp_bluetooth_delete_bonds().
+// status_errno shall be an errno value on failure, otherwise zero.
+void mp_bluetooth_gap_on_bonds_deleted(int status_errno);
+#endif // MICROPY_PY_BLUETOOTH_EXTENDED
+
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 // Call this when a characteristic is written to.

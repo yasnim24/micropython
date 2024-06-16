@@ -395,6 +395,16 @@ static mp_obj_t bluetooth_ble_config(size_t n_args, const mp_obj_t *args, mp_map
                         mp_bluetooth_set_address_mode(addr_mode);
                         break;
                     }
+                    #if MICROPY_PY_BLUETOOTH_EXTENDED
+                    case MP_QSTR_mac: {
+                        mp_buffer_info_t bufinfo = {0};
+                        mp_get_buffer_raise(e->value, &bufinfo, MP_BUFFER_READ);
+                        if (bufinfo.len != 6) {
+                            mp_raise_ValueError(MP_ERROR_TEXT("invalid addr"));
+                        }
+                        bluetooth_handle_errno(mp_bluetooth_set_current_address(bufinfo.buf));
+                    }
+                    #endif // MICROPY_PY_BLUETOOTH_EXTENDED
                     #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
                     case MP_QSTR_bond: {
                         bool bonding_enabled = mp_obj_is_true(e->value);
@@ -416,6 +426,18 @@ static mp_obj_t bluetooth_ble_config(size_t n_args, const mp_obj_t *args, mp_map
                         mp_bluetooth_set_le_secure(le_secure_required);
                         break;
                     }
+                    #if MICROPY_PY_BLUETOOTH_EXTENDED
+                    case MP_QSTR_force_pairing: {
+                        bool force_pairing_enabled = mp_obj_is_true(e->value);
+                        bluetooth_handle_errno(mp_bluetooth_set_force_pairing(force_pairing_enabled));
+                        break;
+                    }
+                    case MP_QSTR_privacy: {
+                        mp_int_t privacy_mode = mp_obj_get_int(e->value);
+                        bluetooth_handle_errno(mp_bluetooth_set_privacy(privacy_mode));
+                        break;
+                    }
+                    #endif // MICROPY_PY_BLUETOOTH_EXTENDED
                     #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
                     default:
                         mp_raise_ValueError(MP_ERROR_TEXT("unknown config param"));
@@ -723,6 +745,15 @@ static mp_obj_t bluetooth_ble_gap_passkey(size_t n_args, const mp_obj_t *args) {
     return bluetooth_handle_errno(mp_bluetooth_gap_passkey(conn_handle, action, passkey));
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(bluetooth_ble_gap_passkey_obj, 4, 4, bluetooth_ble_gap_passkey);
+
+#if MICROPY_PY_BLUETOOTH_EXTENDED
+static mp_obj_t bluetooth_ble_delete_bonds(mp_obj_t self_in) {
+    (void)self_in;
+    return bluetooth_handle_errno(mp_bluetooth_delete_bonds());
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(bluetooth_ble_delete_bonds_obj, bluetooth_ble_delete_bonds);
+
+#endif // MICROPY_PY_BLUETOOTH_EXTENDED
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 // ----------------------------------------------------------------------------
@@ -945,7 +976,10 @@ static const mp_rom_map_elem_t bluetooth_ble_locals_dict_table[] = {
     #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     { MP_ROM_QSTR(MP_QSTR_gap_pair), MP_ROM_PTR(&bluetooth_ble_gap_pair_obj) },
     { MP_ROM_QSTR(MP_QSTR_gap_passkey), MP_ROM_PTR(&bluetooth_ble_gap_passkey_obj) },
-    #endif
+    #if MICROPY_PY_BLUETOOTH_EXTENDED
+    { MP_ROM_QSTR(MP_QSTR_delete_bonds), MP_ROM_PTR(&bluetooth_ble_delete_bonds_obj) },
+    #endif // MICROPY_PY_BLUETOOTH_EXTENDED
+    #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     // GATT Server
     { MP_ROM_QSTR(MP_QSTR_gatts_register_services), MP_ROM_PTR(&bluetooth_ble_gatts_register_services_obj) },
     { MP_ROM_QSTR(MP_QSTR_gatts_read), MP_ROM_PTR(&bluetooth_ble_gatts_read_obj) },
@@ -1349,6 +1383,14 @@ void mp_bluetooth_gap_on_passkey_action(uint16_t conn_handle, uint8_t action, mp
     mp_int_t args[] = { conn_handle, action, passkey };
     invoke_irq_handler(MP_BLUETOOTH_IRQ_PASSKEY_ACTION, args, 2, 1, NULL_ADDR, NULL_UUID, NULL_DATA, NULL_DATA_LEN, 0);
 }
+
+#if MICROPY_PY_BLUETOOTH_EXTENDED
+void mp_bluetooth_gap_on_bonds_deleted(int status_errno) {
+    mp_int_t args[] = {status_errno};
+    invoke_irq_handler(MP_BLUETOOTH_IRQ_BONDS_DELETED, args, 1, 0, NULL_ADDR, NULL_UUID, NULL_DATA, NULL_DATA_LEN, 0);
+}
+#endif // MICROPY_PY_BLUETOOTH_EXTENDED
+
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 void mp_bluetooth_gatts_on_write(uint16_t conn_handle, uint16_t value_handle) {
