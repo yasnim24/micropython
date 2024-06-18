@@ -5,6 +5,7 @@
  *
  * Copyright (c) 2017-2018 Glenn Ruben Bakke
  * Copyright (c) 2018 Ayke van Laethem
+ * Copyright (c) 2024 Yasmin Bosch
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
