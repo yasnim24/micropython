@@ -159,7 +159,14 @@ CFLAGS += -DNRF5_HAL_H='<$(MCU_VARIANT)_hal.h>'
 
 LDFLAGS += $(CFLAGS)
 LDFLAGS += -Xlinker -Map=$(@:.elf=.map)
-LDFLAGS += -mthumb -mabi=aapcs $(addprefix -T,$(LD_FILES)) -L boards/
+LDFLAGS += -mthumb -mabi=aapcs $(addprefix -T,$(LD_FILES))
+
+ifeq ($(USE_NRF_SDK_COMPONENTS), 1)
+# Add search path to specific 'after_text.ld' and 'after_data.ld'
+# that replaces the default files in the boards/ directory.
+LDFLAGS += -L sdk/common/
+endif
+LDFLAGS += -L boards/
 
 ifneq ($(FS_SIZE),)
 LDFLAGS += -Wl,'--defsym=_fs_size=$(FS_SIZE)'
@@ -205,13 +212,6 @@ SRC_SHARED_C += $(addprefix shared/,\
 	tinyusb/mp_cdc_common.c \
 	timeutils/timeutils.c \
 	)
-
-# TODO: Clean up.	
-#ifeq ($(MICROPY_PY_BLUETOOTH), 1)
-#SRC_SHARED_C += $(addprefix shared/,\
-#	runtime/softtimer.c  \
-#	)
-#endif
 
 ifeq ($(MICROPY_FATFS), 1)
 SRC_LIB_C += $(addprefix lib/,\
