@@ -658,12 +658,11 @@ static bool sec_params_verify(ble_gap_sec_params_t * p_sec_params)
         return false;
     }
 
-// TODO: Experimental.
-//    // link bit must be 0.
-//    if (p_sec_params->kdist_own.link || p_sec_params->kdist_peer.link)
-//    {
-//        return false;
-//    }
+    // link bit must be 0.
+    if (p_sec_params->kdist_own.link || p_sec_params->kdist_peer.link)
+    {
+        return false;
+    }
 
     // If bonding is not enabled, no keys can be distributed.
     if (!p_sec_params->bond && (   p_sec_params->kdist_own.enc

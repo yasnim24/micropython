@@ -1057,18 +1057,8 @@ static ret_code_t link_secure_central(uint16_t               conn_handle,
  */
 static void sec_request_process(ble_gap_evt_t const * p_gap_evt)
 {
-    // TODO: Experimental.
-//    NRF_LOG_DEBUG("sec_request_process() - EXPERIMENTAL: ignored");
-
     NRF_LOG_DEBUG("sec_request_process()");
 
-    // TODO: Experimental.
-//    bool is_conn_excluded = ble_conn_state_user_flag_get(
-//            p_gap_evt->conn_handle, m_flag_conn_excluded);
-//
-//    NRF_LOG_DEBUG("sec_request_process() - is_conn_excluded: %u", (uint16_t)is_conn_excluded);
-//
-//    if (sec_procedure(p_gap_evt->conn_handle) || is_conn_excluded)
     if (sec_procedure(p_gap_evt->conn_handle))
     {
         // Ignore request as per spec.

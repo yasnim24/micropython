@@ -4,6 +4,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2016 - 2018 Glenn Ruben Bakke
+ * Copyright (c) 2024 Yasmin Bosch
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -65,10 +66,7 @@ nrf_nvic_state_t nrf_nvic_state = {{0}, 0};
 
 #if USE_NRF_SDK_COMPONENTS
 // Prevent parentheses around values because otherwise the macros will fail.
-// TODO: Experimental
-//#define BLE_OBSERVER_PRIO 3
-// See also NRF_BLE_GATT_BLE_OBSERVER_PRIO in nRF5 SDK 17.1.0 examples ble_app_multirole_lesc.
-#define BLE_OBSERVER_PRIO 1
+#define BLE_OBSERVER_PRIO 3
 #define SOC_OBSERVER_PRIO 1
 #endif
 
@@ -104,13 +102,9 @@ static void soc_evt_handler(uint32_t evt_id, void *p_context) {
     // Forward SD event to flash driver.
     switch (evt_id) {
         case NRF_EVT_FLASH_OPERATION_SUCCESS:
-            // TODO: Use NRF_SDH_SOC_LOG_ENABLED instead.
-            DEBUG_printf("soc_evt_handler(NRF_EVT_FLASH_OPERATION_SUCCESS)\n");
             flash_operation_finished(FLASH_STATE_SUCCESS);
             break;
         case NRF_EVT_FLASH_OPERATION_ERROR:
-            // TODO: Use NRF_SDH_SOC_LOG_ENABLED instead.
-            DEBUG_printf("soc_evt_handler(NRF_EVT_FLASH_OPERATION_ERROR)\n");
             flash_operation_finished(FLASH_STATE_ERROR);
             break;
         default:
@@ -254,10 +248,10 @@ void SWI2_EGU2_IRQHandler(void) {
         if (err_code != NRF_SUCCESS) {
             // Possible error conditions:
             //  * NRF_ERROR_NOT_FOUND: no events left, break
-            //  * NRF_ERROR_DATA_SIZE: retry with a bigger data buffer
-            //    (currently not handled, TODO)
-            //  * NRF_ERROR_INVALID_ADDR: pointer is not aligned, should
-            //    not happen.
+            //  * NRF_ERROR_DATA_SIZE: retry with a bigger data buffer,
+            //    should not happen.
+            //  * NRF_ERROR_INVALID_ADDR: pointer is not aligned,
+            //    should not happen.
             // In all cases, it's best to simply stop now.
             if (err_code == NRF_ERROR_DATA_SIZE) {
                 DEBUG_printf("NRF_ERROR_DATA_SIZE\n");

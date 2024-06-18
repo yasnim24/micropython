@@ -38,10 +38,14 @@
  *
  */
 
+//
+// May 2024
+// Adapted for MicroPython.
+//
+
 #ifndef NRFX_CONFIG_H__
 #define NRFX_CONFIG_H__
 
-// TODO - temporary redirection
 #include "../../../common/sdk_config.h"
 
 #endif // NRFX_CONFIG_H__

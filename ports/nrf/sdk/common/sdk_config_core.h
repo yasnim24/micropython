@@ -38,9 +38,45 @@
  *
  */
 
+//
+// May 2024
+// 'sdk_config.h' adapted for MicroPython.
+//
 
-#ifndef SDK_CONFIG_H
-#define SDK_CONFIG_H
+//
+// Important configurations
+// ------------------------
+//
+// NRF_BLE_LESC_ENABLED:
+//   Enable LE Secure encryption.
+//
+// NRF_SDH_BLE_GATT_MAX_MTU_SIZE:
+//   Maximum size of ATT packet that can be sent or received.
+//   This is the maximum value that can be set with
+//   mp_bluetooth_set_preferred_mtu().
+//
+//   Note:
+//   The RAM size required by the 'Soft Device' will increase
+//   with increasing maximum MTU values.
+//   Therefore _sd_ram in the ld-file has to be increased accordingly.
+//
+//
+// NRF_LOG_ENABLED:
+//   Enable log outputs.
+// *_LOG_ENABLED:
+//   Enable log outputs for a certain component.
+//
+// NRF_LOG_DEFAULT_LEVEL:
+//   Default log level.
+//
+// *_LOG_LEVEL:
+//   Log levels.
+// PM_LOG_LEVEL:
+//   Peer Manager log level.
+//
+
+#ifndef MICROPY_INCLUDED_NRF_SDK_CONFIG_CORE_H
+#define MICROPY_INCLUDED_NRF_SDK_CONFIG_CORE_H
 
 //==========================================================
 
@@ -87,9 +123,7 @@
 // <i> disable this to save code space.
 
 #ifndef PM_SERVICE_CHANGED_ENABLED
-// TODO: Experimental
 #define PM_SERVICE_CHANGED_ENABLED 1
-//#define PM_SERVICE_CHANGED_ENABLED 0
 #endif
 
 // <q> PM_PEER_RANKS_ENABLED  - Enable/disable the peer rank management in Peer Manager.
@@ -98,9 +132,7 @@
 // <i> Set this to false to save code space if not using the peer rank API.
 
 #ifndef PM_PEER_RANKS_ENABLED
-// TODO: Experimental.
-//#define PM_PEER_RANKS_ENABLED 1
-#define PM_PEER_RANKS_ENABLED 0
+#define PM_PEER_RANKS_ENABLED 1
 #endif
 
 // <q> PM_LESC_ENABLED  - Enable/disable LESC support in Peer Manager.
@@ -144,11 +176,10 @@
 // <o> PM_HANDLER_SEC_DELAY_MS - Delay before starting security.
 // <i>  This might be necessary for interoperability reasons, especially as peripheral.
 
+// Note: app_timer is needed for values other than 0.
+
 #ifndef PM_HANDLER_SEC_DELAY_MS
-// TODO: Experimental
 #define PM_HANDLER_SEC_DELAY_MS 0
-// Needs app_timer.
-//#define PM_HANDLER_SEC_DELAY_MS 3000
 #endif
 
 // </e>
@@ -735,102 +766,6 @@
 
 // </e>
 
-// <e> APP_TIMER_ENABLED - app_timer - Application timer functionality
-//==========================================================
-#ifndef APP_TIMER_ENABLED
-// TODO: Needed by PM_HANDLER_SEC_DELAY_MS.
-//#define APP_TIMER_ENABLED 1
-#define APP_TIMER_ENABLED 0
-#endif
-// <o> APP_TIMER_CONFIG_RTC_FREQUENCY  - Configure RTC prescaler.
-
-// <0=> 32768 Hz
-// <1=> 16384 Hz
-// <3=> 8192 Hz
-// <7=> 4096 Hz
-// <15=> 2048 Hz
-// <31=> 1024 Hz
-
-#ifndef APP_TIMER_CONFIG_RTC_FREQUENCY
-#define APP_TIMER_CONFIG_RTC_FREQUENCY 1
-#endif
-
-// <o> APP_TIMER_CONFIG_IRQ_PRIORITY  - Interrupt priority
-
-
-// <i> Priorities 0,2 (nRF51) and 0,1,4,5 (nRF52) are reserved for SoftDevice
-// <0=> 0 (highest)
-// <1=> 1
-// <2=> 2
-// <3=> 3
-// <4=> 4
-// <5=> 5
-// <6=> 6
-// <7=> 7
-
-#ifndef APP_TIMER_CONFIG_IRQ_PRIORITY
-#define APP_TIMER_CONFIG_IRQ_PRIORITY 6
-#endif
-
-// <o> APP_TIMER_CONFIG_OP_QUEUE_SIZE - Capacity of timer requests queue.
-// <i> Size of the queue depends on how many timers are used
-// <i> in the system, how often timers are started and overall
-// <i> system latency. If queue size is too small app_timer calls
-// <i> will fail.
-
-#ifndef APP_TIMER_CONFIG_OP_QUEUE_SIZE
-#define APP_TIMER_CONFIG_OP_QUEUE_SIZE 10
-#endif
-
-// <q> APP_TIMER_CONFIG_USE_SCHEDULER  - Enable scheduling app_timer events to app_scheduler
-
-
-#ifndef APP_TIMER_CONFIG_USE_SCHEDULER
-#define APP_TIMER_CONFIG_USE_SCHEDULER 0
-#endif
-
-// <q> APP_TIMER_KEEPS_RTC_ACTIVE  - Enable RTC always on
-
-
-// <i> If option is enabled RTC is kept running even if there is no active timers.
-// <i> This option can be used when app_timer is used for timestamping.
-
-#ifndef APP_TIMER_KEEPS_RTC_ACTIVE
-#define APP_TIMER_KEEPS_RTC_ACTIVE 0
-#endif
-
-// <o> APP_TIMER_SAFE_WINDOW_MS - Maximum possible latency (in milliseconds) of handling app_timer event.
-// <i> Maximum possible timeout that can be set is reduced by safe window.
-// <i> Example: RTC frequency 16384 Hz, maximum possible timeout 1024 seconds - APP_TIMER_SAFE_WINDOW_MS.
-// <i> Since RTC is not stopped when processor is halted in debugging session, this value
-// <i> must cover it if debugging is needed. It is possible to halt processor for APP_TIMER_SAFE_WINDOW_MS
-// <i> without corrupting app_timer behavior.
-
-#ifndef APP_TIMER_SAFE_WINDOW_MS
-#define APP_TIMER_SAFE_WINDOW_MS 300000
-#endif
-
-// <h> App Timer Legacy configuration - Legacy configuration.
-
-//==========================================================
-// <q> APP_TIMER_WITH_PROFILER  - Enable app_timer profiling
-
-
-#ifndef APP_TIMER_WITH_PROFILER
-#define APP_TIMER_WITH_PROFILER 0
-#endif
-
-// <q> APP_TIMER_CONFIG_SWI_NUMBER  - Configure SWI instance used.
-
-
-#ifndef APP_TIMER_CONFIG_SWI_NUMBER
-#define APP_TIMER_CONFIG_SWI_NUMBER 0
-#endif
-
-// </h>
-//==========================================================
-
-// </e>
 
 // <e> FDS_ENABLED - fds - Flash data storage module
 //==========================================================
@@ -1295,12 +1230,9 @@
 #endif
 
 // <o> NRF_SDH_BLE_GATT_MAX_MTU_SIZE - Static maximum MTU size.
-#ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
-// TODO: Experimental
-//#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 23
 // 251 is the maximum allowed value.
-//#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 64
-#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 251
+#ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 23
 #endif
 
 // <o> NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE - Attribute Table size in bytes. The size must be a multiple of 4.
@@ -1346,9 +1278,7 @@
 
 // <o> PM_BLE_OBSERVER_PRIO - Priority with which BLE events are dispatched to the Peer Manager module.
 #ifndef PM_BLE_OBSERVER_PRIO
-// TODO: Experimental
-//#define PM_BLE_OBSERVER_PRIO 1
-#define PM_BLE_OBSERVER_PRIO 2
+#define PM_BLE_OBSERVER_PRIO 1
 #endif
 
 // </h>
@@ -1675,9 +1605,7 @@
 // <e> NRF_LOG_ENABLED - nrf_log - Logger
 //==========================================================
 #ifndef NRF_LOG_ENABLED
-// TODO: Debug
-//#define NRF_LOG_ENABLED 0
-#define NRF_LOG_ENABLED 1
+#define NRF_LOG_ENABLED 0
 #endif
 
 
@@ -1690,9 +1618,7 @@
 // <4=> Debug
 
 #ifndef NRF_LOG_DEFAULT_LEVEL
-// TODO: Debug
 #define NRF_LOG_DEFAULT_LEVEL 3
-//#define NRF_LOG_DEFAULT_LEVEL 4
 #endif
 
 
@@ -1797,9 +1723,7 @@
 // <4=> Debug
 
 #ifndef PM_LOG_LEVEL
-// TODO: Debug
 #define PM_LOG_LEVEL 3
-//#define PM_LOG_LEVEL 4
 #endif
 
 // <o> PM_LOG_INFO_COLOR  - ANSI escape code prefix.
@@ -1839,8 +1763,6 @@
 // <e> NRF_SDH_BLE_LOG_ENABLED - Enable logging in SoftDevice handler (BLE) module.
 //==========================================================
 #ifndef NRF_SDH_BLE_LOG_ENABLED
-// TODO: Debug
-//#define NRF_SDH_BLE_LOG_ENABLED 1
 #define NRF_SDH_BLE_LOG_ENABLED 0
 #endif
 // <o> NRF_SDH_BLE_LOG_LEVEL  - Default Severity level
@@ -1892,8 +1814,6 @@
 // <e> NRF_SDH_LOG_ENABLED - Enable logging in SoftDevice handler module.
 //==========================================================
 #ifndef NRF_SDH_LOG_ENABLED
-// TODO: Debug
-//#define NRF_SDH_LOG_ENABLED 1
 #define NRF_SDH_LOG_ENABLED 0
 #endif
 // <o> NRF_SDH_LOG_LEVEL  - Default Severity level
@@ -1945,8 +1865,6 @@
 // <e> NRF_SDH_SOC_LOG_ENABLED - Enable logging in SoftDevice handler (SoC) module.
 //==========================================================
 #ifndef NRF_SDH_SOC_LOG_ENABLED
-// TODO: Debug
-//#define NRF_SDH_SOC_LOG_ENABLED 1
 #define NRF_SDH_SOC_LOG_ENABLED 0
 #endif
 // <o> NRF_SDH_SOC_LOG_LEVEL  - Default Severity level
@@ -1996,8 +1914,5 @@
 // </e>
 
 
-
-
 // <<< end of configuration section >>>
-#endif //SDK_CONFIG_H
-
+#endif // MICROPY_INCLUDED_NRF_SDK_CONFIG_CORE_H
