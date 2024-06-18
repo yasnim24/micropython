@@ -196,14 +196,6 @@
 #define MP_BLUETOOTH_GATTS_OP_NOTIFY                    (1)
 #define MP_BLUETOOTH_GATTS_OP_INDICATE                  (2)
 
-// ---- Privacy modes for mp_bluetooth_set_privacy()
-// Privacy off (default).
-#define MP_BLUETOOTHEXT_PRIVACY_OFF                     (0)
-// Use Resolvable Private Addresses - matches MP_BLUETOOTH_ADDRESS_MODE_RPA.
-#define MP_BLUETOOTHEXT_PRIVACY_RPA                     (2)
-// Use Non-Resolvable Private Addresses - matches MP_BLUETOOTH_ADDRESS_MODE_NRPA.
-#define MP_BLUETOOTHEXT_PRIVACY_NRPA                    (3)
-
 /*
 These aren't included in the module for space reasons, but can be used
 in your Python code if necessary.
@@ -338,9 +330,7 @@ void mp_bluetooth_set_io_capability(uint8_t capability);
 
 #if MICROPY_PY_BLUETOOTH_EXTENDED
 // Force a pairing procedure even if there is an existing bond.
-int mp_bluetooth_set_force_pairing(bool enabled);
-// Set privacy mode (see MP_BLUETOOTH_PRIVACY_*).
-int mp_bluetooth_set_privacy(uint8_t privacy_mode);
+void mp_bluetooth_set_force_pairing(bool enabled);
 // Delete all stored bonding information.
 // This will result in the event MP_BLUETOOTH_IRQ_BONDS_DELETED.
 int mp_bluetooth_delete_bonds(void);

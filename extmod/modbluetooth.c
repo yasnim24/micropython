@@ -429,12 +429,7 @@ static mp_obj_t bluetooth_ble_config(size_t n_args, const mp_obj_t *args, mp_map
                     #if MICROPY_PY_BLUETOOTH_EXTENDED
                     case MP_QSTR_force_pairing: {
                         bool force_pairing_enabled = mp_obj_is_true(e->value);
-                        bluetooth_handle_errno(mp_bluetooth_set_force_pairing(force_pairing_enabled));
-                        break;
-                    }
-                    case MP_QSTR_privacy: {
-                        mp_int_t privacy_mode = mp_obj_get_int(e->value);
-                        bluetooth_handle_errno(mp_bluetooth_set_privacy(privacy_mode));
+                        mp_bluetooth_set_force_pairing(force_pairing_enabled);
                         break;
                     }
                     #endif // MICROPY_PY_BLUETOOTH_EXTENDED
