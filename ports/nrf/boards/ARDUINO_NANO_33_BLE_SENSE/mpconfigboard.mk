@@ -1,8 +1,12 @@
 MCU_SERIES = m4
 MCU_VARIANT = nrf52
 MCU_SUB_VARIANT = nrf52840
-SOFTDEV_VERSION = 6.1.1
+SOFTDEV_VERSION ?= 6.1.1
 SD=s140
+
+ifeq ($(SOFTDEV_VERSION), 7.2.0)
+	NRF_SDK_VERSION ?= 17.1.0
+endif
 
 LD_FILES += boards/ARDUINO_NANO_33_BLE_SENSE/nano_bootloader.ld boards/nrf52840_1M_256k.ld boards/nrf52840_open_bootloader_1.2.x.ld
 
