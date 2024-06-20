@@ -100,7 +100,8 @@
 // With debug output the changed timing could result in wrong behavior.
 // This has been seen e.g. with BLE_GAP_EVT_ADV_REPORT - see there.
 
-// #define DEBUG_MODBLUETOOTH (1)
+// TODO: Debug.
+#define DEBUG_MODBLUETOOTH (1)
 
 #ifndef DEBUG_MODBLUETOOTH
 #define DEBUG_MODBLUETOOTH (0)
@@ -380,23 +381,6 @@ typedef struct {
 
 static m_peer_manager_state_t m_peer_manager_state;
 
-
-// TODO: Clean up.
-//// Key lengths per connection handle.
-////
-//// Index:
-////   Connection handle.
-////   See
-////   "https://devzone.nordicsemi.com/f/nordic-q-a/41946/what-is-the-point-of-connection-handles":
-////   "... E.g. if you are connected to four different central devices, their
-////    connection handles will be assigned the values 0x0, 0x1, 0x2 and 0x3 respectively. ..."
-////
-//// Item:
-////   Key length set from BLE_GAP_EVT_CONN_SEC_UPDATE.
-////   0 if BLE_GAP_EVT_CONN_SEC_UPDATE has not been triggered.
-// static uint8_t m_connection_handle_key_lengths[BLE_MAX_CONN_COUNT];
-
-
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 
@@ -605,7 +589,7 @@ static void peer_manager_event_handler(pm_evt_t const *p_evt) {
         case PM_EVT_PEERS_DELETE_SUCCEEDED: {
             m_static_flags.delete_bonds_in_progress = 0;
 
-            mp_bluetooth_gap_on_bonds_deleted(0);
+            mp_bluetooth_on_bonds_deleted(0);
             break;
         }
         case PM_EVT_PEERS_DELETE_FAILED: {
@@ -614,7 +598,7 @@ static void peer_manager_event_handler(pm_evt_t const *p_evt) {
             const pm_failure_evt_t *p_peers_delete_failed_evt = &p_evt->params.peers_delete_failed_evt;
             DEBUG_printf("PM_EVT_PEERS_DELETE_FAILED: %s\n", nrf_strerror_get(p_peers_delete_failed_evt->error));
             int status_errno = nrf_error_to_errno(p_peers_delete_failed_evt->error);
-            mp_bluetooth_gap_on_bonds_deleted(status_errno);
+            mp_bluetooth_on_bonds_deleted(status_errno);
             break;
         }
 
@@ -745,8 +729,6 @@ int mp_bluetooth_init(void) {
 
     #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     m_static_flags.io_capability = MP_BLUETOOTH_IO_CAPABILITY_NO_INPUT_OUTPUT;
-    // TODO: Clean up.
-//    memset(m_connection_handle_key_lengths, 0, sizeof(m_connection_handle_key_lengths));
     #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
     m_prefered_mtu = BLE_GATT_ATT_MTU_DEFAULT;
@@ -1226,11 +1208,19 @@ int mp_bluetooth_delete_bonds(void) {
     }
 
     if (err_code == NRF_SUCCESS) {
-        err_code = pm_peers_delete();
-    }
-
-    if (err_code == NRF_SUCCESS) {
+        // PM_EVT_PEERS_DELETE_SUCCEEDED will be sent by pm_peers_delete() directly
+        // if there are no bonds.
+        // For that case and other cases were PM_EVT_PEERS_DELETE_SUCCEEDED or
+        // PM_EVT_PEERS_DELETE_FAILED are handled before the code behind
+        // pm_peers_delete() could be executed delete_bonds_in_progress is
+        // set before pm_peers_delete() and not after.
         m_static_flags.delete_bonds_in_progress = 1;
+
+        err_code = pm_peers_delete();
+
+        if (err_code != NRF_SUCCESS) {
+            m_static_flags.delete_bonds_in_progress = 0;
+        }
     }
 
     DEBUG_printf("mp_bluetooth_delete_bonds: %s\n", nrf_strerror_get(err_code));
@@ -2607,8 +2597,6 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
 
             // Clear connection related infos.
             memset(&(m_connection_handle_info[conn_handle]), 0, sizeof(m_connection_info_t));
-            // TODO: Clean up.
-//            m_connection_handle_key_lengths[conn_handle] = 0;
 
             uint16_t irq_event;
 
@@ -2772,9 +2760,6 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
                 (uint16_t)p_conn_sec->sec_mode.lv,
                 (uint16_t)p_conn_sec->encr_key_size);
 
-            // TODO: Clean up.
-//            m_connection_handle_key_lengths[conn_handle] = p_conn_sec->encr_key_size;
-
             // It is assumed that the Peer Manager handles BLE_GAP_EVT_CONN_SEC_UPDATE first.
 
             pm_conn_sec_status_t pm_conn_sec_status;
@@ -2790,6 +2775,8 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
                 // Call this when any connection encryption has been changed (e.g. during pairing).
                 mp_bluetooth_gatts_on_encryption_update(
                     conn_handle, encrypted, authenticated, bonded, key_size);
+            } else {
+                DEBUG_printf("pm_conn_sec_status_get() returned %s\n", nrf_strerror_get(err_code));
             }
 
             break;
