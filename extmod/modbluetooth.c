@@ -1380,7 +1380,7 @@ void mp_bluetooth_gap_on_passkey_action(uint16_t conn_handle, uint8_t action, mp
 }
 
 #if MICROPY_PY_BLUETOOTH_EXTENDED
-void mp_bluetooth_gap_on_bonds_deleted(int status_errno) {
+void mp_bluetooth_on_bonds_deleted(int status_errno) {
     mp_int_t args[] = {status_errno};
     invoke_irq_handler(MP_BLUETOOTH_IRQ_BONDS_DELETED, args, 1, 0, NULL_ADDR, NULL_UUID, NULL_DATA, NULL_DATA_LEN, 0);
 }

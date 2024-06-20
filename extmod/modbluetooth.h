@@ -456,7 +456,7 @@ void mp_bluetooth_gap_on_passkey_action(uint16_t conn_handle, uint8_t action, mp
 #if MICROPY_PY_BLUETOOTH_EXTENDED
 // Notify modbluetooth about the result of mp_bluetooth_delete_bonds().
 // status_errno shall be an errno value on failure, otherwise zero.
-void mp_bluetooth_gap_on_bonds_deleted(int status_errno);
+void mp_bluetooth_on_bonds_deleted(int status_errno);
 #endif // MICROPY_PY_BLUETOOTH_EXTENDED
 
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
