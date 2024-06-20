@@ -100,8 +100,7 @@
 // With debug output the changed timing could result in wrong behavior.
 // This has been seen e.g. with BLE_GAP_EVT_ADV_REPORT - see there.
 
-// TODO: Debug.
-#define DEBUG_MODBLUETOOTH (1)
+// #define DEBUG_MODBLUETOOTH (1)
 
 #ifndef DEBUG_MODBLUETOOTH
 #define DEBUG_MODBLUETOOTH (0)
@@ -381,6 +380,21 @@ typedef struct {
 
 static m_peer_manager_state_t m_peer_manager_state;
 
+
+// Key lengths per connection handle.
+//
+// Index:
+//   Connection handle.
+//   See
+//   "https://devzone.nordicsemi.com/f/nordic-q-a/41946/what-is-the-point-of-connection-handles":
+//   "... E.g. if you are connected to four different central devices, their
+//    connection handles will be assigned the values 0x0, 0x1, 0x2 and 0x3 respectively. ..."
+//
+// Item:
+//   Key length set from BLE_GAP_EVT_CONN_SEC_UPDATE.
+//   0 if BLE_GAP_EVT_CONN_SEC_UPDATE has not been triggered.
+static uint8_t m_connection_handle_key_lengths[BLE_MAX_CONN_COUNT];
+
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
 
@@ -583,9 +597,34 @@ static void peer_manager_event_handler(pm_evt_t const *p_evt) {
     pm_handler_on_pm_evt(p_evt);
     pm_handler_flash_clean(p_evt);
 
-    #if MICROPY_PY_BLUETOOTH_EXTENDED
     switch (p_evt->evt_id)
     {
+        case PM_EVT_CONN_SEC_SUCCEEDED: {
+            uint16_t conn_handle = p_evt->conn_handle;
+
+            pm_conn_sec_status_t pm_conn_sec_status;
+            uint32_t err_code = pm_conn_sec_status_get(conn_handle, &pm_conn_sec_status);
+
+            if (err_code == NRF_SUCCESS) {
+                bool encrypted = pm_conn_sec_status.encrypted ? true : false;
+                bool authenticated = pm_conn_sec_status.mitm_protected ? true : false;
+                bool bonded = pm_conn_sec_status.bonded ? true : false;
+
+                // It is assumed that BLE_GAP_EVT_CONN_SEC_UPDATE is handled first.
+                uint8_t key_size = m_connection_handle_key_lengths[conn_handle];
+
+                // Call this when any connection encryption has been changed (e.g. during pairing).
+                mp_bluetooth_gatts_on_encryption_update(
+                    conn_handle, encrypted, authenticated, bonded, key_size);
+            } else {
+                DEBUG_printf("pm_conn_sec_status_get() returned %s\n", nrf_strerror_get(err_code));
+            }
+
+            break;
+        }
+
+            #if MICROPY_PY_BLUETOOTH_EXTENDED
+
         case PM_EVT_PEERS_DELETE_SUCCEEDED: {
             m_static_flags.delete_bonds_in_progress = 0;
 
@@ -602,11 +641,12 @@ static void peer_manager_event_handler(pm_evt_t const *p_evt) {
             break;
         }
 
+            #endif // MICROPY_PY_BLUETOOTH_EXTENDED
+
         default: {
             break;
         }
     }
-    #endif // MICROPY_PY_BLUETOOTH_EXTENDED
 }
 
 
@@ -729,6 +769,7 @@ int mp_bluetooth_init(void) {
 
     #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     m_static_flags.io_capability = MP_BLUETOOTH_IO_CAPABILITY_NO_INPUT_OUTPUT;
+    memset(m_connection_handle_key_lengths, 0, sizeof(m_connection_handle_key_lengths));
     #endif // MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 
     m_prefered_mtu = BLE_GATT_ATT_MTU_DEFAULT;
@@ -2597,6 +2638,7 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
 
             // Clear connection related infos.
             memset(&(m_connection_handle_info[conn_handle]), 0, sizeof(m_connection_info_t));
+            m_connection_handle_key_lengths[conn_handle] = 0;
 
             uint16_t irq_event;
 
@@ -2747,6 +2789,7 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
                 (uint16_t)p_peer_params->kdist_peer.link);
             break;
         }
+
             #endif     // DEBUG_MODBLUETOOTH
 
         case BLE_GAP_EVT_CONN_SEC_UPDATE: {
@@ -2755,29 +2798,13 @@ void modbluetooth_ble_evt_handler(const ble_evt_t *p_ble_evt) {
             const ble_gap_conn_sec_t *p_conn_sec =
                 &(p_ble_evt->evt.gap_evt.params.conn_sec_update.conn_sec);
 
-            DEBUG_printf("BLE_GAP_EVT_CONN_SEC_UPDATE - sm: %u, lv: %u, encr_key_size: %u\n",
+            DEBUG_printf("BLE_GAP_EVT_CONN_SEC_UPDATE - conn_handle: %u, sm: %u, lv: %u, encr_key_size: %u\n",
+                conn_handle,
                 (uint16_t)p_conn_sec->sec_mode.sm,
                 (uint16_t)p_conn_sec->sec_mode.lv,
                 (uint16_t)p_conn_sec->encr_key_size);
 
-            // It is assumed that the Peer Manager handles BLE_GAP_EVT_CONN_SEC_UPDATE first.
-
-            pm_conn_sec_status_t pm_conn_sec_status;
-            uint32_t err_code = pm_conn_sec_status_get(conn_handle, &pm_conn_sec_status);
-
-            if (err_code == NRF_SUCCESS) {
-                bool encrypted = pm_conn_sec_status.encrypted ? true : false;
-                bool authenticated = pm_conn_sec_status.mitm_protected ? true : false;
-                bool bonded = pm_conn_sec_status.bonded ? true : false;
-
-                uint8_t key_size = p_conn_sec->encr_key_size;
-
-                // Call this when any connection encryption has been changed (e.g. during pairing).
-                mp_bluetooth_gatts_on_encryption_update(
-                    conn_handle, encrypted, authenticated, bonded, key_size);
-            } else {
-                DEBUG_printf("pm_conn_sec_status_get() returned %s\n", nrf_strerror_get(err_code));
-            }
+            m_connection_handle_key_lengths[conn_handle] = p_conn_sec->encr_key_size;
 
             break;
         }
