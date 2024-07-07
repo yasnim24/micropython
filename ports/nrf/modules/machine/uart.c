@@ -6,6 +6,7 @@
  * Copyright (c) 2013, 2014 Damien P. George
  * Copyright (c) 2015 Glenn Ruben Bakke
  * Copyright (c) 2018 Ayke van Laethem
+ * Copyright (c) 2024 Yasmin Bosch
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -93,6 +94,9 @@ typedef struct _machine_uart_obj_t {
     machine_uart_buf_t buf;
     uint16_t timeout;       // timeout waiting for first char (in ms)
     uint16_t timeout_char;  // timeout waiting between chars (in ms)
+#if !MICROPY_PY_BLE_NUS && MICROPY_KBD_EXCEPTION
+    int16_t kbd_intr_char;  // char that rises KeyboardInterrupt; -1 to disable
+#endif
 } machine_uart_obj_t;
 
 static const nrfx_uart_t instance0 = NRFX_UART_INSTANCE(0);
@@ -119,7 +123,7 @@ static void uart_event_handler(nrfx_uart_event_t const *p_event, void *p_context
         nrfx_uart_rx(self->p_uart, &self->buf.rx_buf[0], 1);
         int chr = self->buf.rx_buf[0];
         #if !MICROPY_PY_BLE_NUS && MICROPY_KBD_EXCEPTION
-        if (chr == mp_interrupt_char) {
+        if (chr == self->kbd_intr_char) {
             self->buf.rx_ringbuf.iget = 0;
             self->buf.rx_ringbuf.iput = 0;
             mp_sched_keyboard_interrupt();
@@ -187,12 +191,15 @@ static void mp_machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args,
 //   - `id`is bus id.
 //   - `baudrate` is the clock rate.
 static mp_obj_t mp_machine_uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
-    enum { ARG_id, ARG_baudrate, ARG_timeout, ARG_timeout_char };
+    enum { ARG_id, ARG_baudrate, ARG_timeout, ARG_timeout_char, ARG_kbd_intr_char };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_id,       MP_ARG_REQUIRED | MP_ARG_OBJ },
         { MP_QSTR_baudrate, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 9600} },
         { MP_QSTR_timeout, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 1} },
         { MP_QSTR_timeout_char, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 1} },
+#if !MICROPY_PY_BLE_NUS && MICROPY_KBD_EXCEPTION
+        { MP_QSTR_kbd_intr_char, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 3} },
+#endif
     };
 
     // parse args
@@ -245,6 +252,9 @@ static mp_obj_t mp_machine_uart_make_new(const mp_obj_type_t *type, size_t n_arg
 #endif
     self->timeout = args[ARG_timeout].u_int;
     self->timeout_char = args[ARG_timeout_char].u_int;
+#if !MICROPY_PY_BLE_NUS && MICROPY_KBD_EXCEPTION
+    self->kbd_intr_char = args[ARG_kbd_intr_char].u_int;
+#endif
 
     // Set context to this instance of UART
     config.p_context = (void *)self;
